@@ -9,9 +9,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "lib": ["ESNext", "DOM"],
     "skipLibCheck": true,
     "noEmit": true,
+    "types": ["node", "@ionic/vue"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "paths": {
       "@/*": ["./src/*"]
     }
