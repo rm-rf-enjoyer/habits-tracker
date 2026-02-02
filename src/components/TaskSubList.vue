@@ -1,26 +1,12 @@
 <template>
-  <div class="main-container no-select">
-    <draggable v-model="internalItems" item-key="id" v-bind="dragOptions" class="drag-area" @end="onDragEnd">
-      <template #item="{ element }">
-        <div class="item-wrapper">
-          <div v-if="todoStore.deletingIds.includes(element.id)" class="card delete-card">
-            <div class="delete-content" @click="todoStore.cancelDeletion(element.id)">
-              <span class="delete-text"> Удаление...</span>
-              <span class="cancel-label">[ОТМЕНА]</span>
-            </div>
-            <div class="delete-progress"></div>
-          </div>
-
-          <div v-else class="card main-card" :class="{ 'is-selected': todoStore.selectedId === element.id }"
-            @touchstart="handleTouchStart($event, element)" @touchend="handleTouchEnd" @touchmove="handleTouchMove"
-            @click="handleTaskClick(element)">
-            <div class="card-inner">
-              <span class="item-text" :class="{ 'completed-text': element.completed }">
-                {{ element.text }}
-              </span>
-            </div>
-          </div>
-        </div>
+  <div class="w-full px-2 pt-2 select-none transition-colors duration-300">
+    <draggable v-model="internalItems" item-key="id" v-bind="dragOptions" class="flex flex-col gap-1.5"
+      @end="onDragEnd">
+      <template #item="{ element }: { element: TodoItem }">
+        <TodoListItem :item="element" :is-selected="todoStore.selectedId === element.id"
+          :is-deleting="todoStore.deletingIds.includes(element.id)" @touchstart="handleTouchStart($event, element)"
+          @touchend="handleTouchEnd" @touchmove="handleTouchMove" @click="handleItemClick($event, element)"
+          @open-list="id => $emit('open-list', id)" @cancel-delete="id => todoStore.cancelDeletion(id)" />
       </template>
     </draggable>
   </div>
@@ -30,15 +16,15 @@
 import { computed } from 'vue';
 import { useTodoStore, type TodoItem } from '../stores/todoStore';
 import draggable from 'vuedraggable';
+import TodoListItem from './TodoListItem.vue';
 
 const props = defineProps<{
   tasks: TodoItem[]
 }>();
 
-const emit = defineEmits(['update:tasks']);
+const emit = defineEmits(['update:tasks', 'open-list']);
 const todoStore = useTodoStore();
 
-// Двустороннее связывание для draggable
 const internalItems = computed({
   get: () => props.tasks,
   set: (val) => emit('update:tasks', val)
@@ -48,21 +34,17 @@ const dragOptions = {
   animation: 200,
   delay: 400,
   delayOnTouchOnly: true,
-  ghostClass: 'ghost-card',
+  ghostClass: 'opacity-0',
   forceFallback: true
 };
 
-// Твоя логика кликов и тачей (копируем один в один)
-const handleTaskClick = (element: TodoItem) => {
-  if (todoStore.selectedId) { todoStore.selectedId = null; return; }
-  todoStore.toggleTask(element.id);
-};
-
+// --- Твоя логика (без изменений) ---
 let touchTimer: any = null;
 let isScrolling = false;
 
-const handleTouchStart = (e: any, element: any) => {
+const handleTouchStart = (e: TouchEvent, element: TodoItem) => {
   isScrolling = false;
+  if (touchTimer) clearTimeout(touchTimer);
   touchTimer = setTimeout(() => {
     if (!isScrolling) {
       if (window.navigator.vibrate) window.navigator.vibrate(40);
@@ -73,98 +55,15 @@ const handleTouchStart = (e: any, element: any) => {
 
 const handleTouchMove = () => { isScrolling = true; clearTimeout(touchTimer); };
 const handleTouchEnd = () => { clearTimeout(touchTimer); };
-const onDragEnd = () => {
-  todoStore.selectedId = null;
-  // Метод saveToLocalStorage удаляем, так как его нет в сторе
+
+const handleItemClick = (event: Event, element: TodoItem) => {
+  if (todoStore.selectedId) { todoStore.selectedId = null; return; }
+  if (!element.items || (element.items.length === 0 && !element.title)) {
+    todoStore.toggleTask(element.id);
+  } else {
+    emit('open-list', element.id);
+  }
 };
+
+const onDragEnd = () => { todoStore.selectedId = null; };
 </script>
-
-<style scoped>
-/* Вставляем сюда ТВОИ ОРИГИНАЛЬНЫЕ стили из TodoList.vue */
-.no-select {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.main-container {
-  padding: 6px;
-  background: #ffffff;
-  font-family: 'Iosevka Nerd Font', monospace;
-}
-
-.drag-area {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.card {
-  background: #ffffff;
-  border-radius: 4px;
-  border: 1px solid #f0f0f0;
-  transition: background 0.2s;
-}
-
-.card-inner {
-  padding: 4px 10px;
-}
-
-.item-text {
-  font-size: 0.9rem;
-  color: #000;
-}
-
-.completed-text {
-  text-decoration: line-through;
-  color: #a1a1a1;
-  opacity: 0.5;
-}
-
-.is-selected {
-  background: #f0f7ff;
-  border-color: #3880ff;
-}
-
-.delete-card {
-  background: #000;
-  border: 1px solid #000;
-  padding: 8px 10px;
-  position: relative;
-}
-
-.delete-text {
-  color: #fff;
-  font-size: 0.8rem;
-}
-
-.cancel-label {
-  color: #3880ff;
-  font-weight: bold;
-  margin-left: 10px;
-}
-
-.delete-progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  background: #3880ff;
-  width: 100%;
-  animation: drain 10s linear forwards;
-}
-
-@keyframes drain {
-  from {
-    transform: scaleX(1);
-  }
-
-  to {
-    transform: scaleX(0);
-  }
-}
-
-.ghost-card {
-  opacity: 0;
-}
-</style>

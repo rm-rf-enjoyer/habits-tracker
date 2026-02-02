@@ -1,31 +1,25 @@
 <template>
-  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed" class="mb-6 mr-6">
 
-    <template v-if="mode === 'habits'">
-      <ion-fab-button color="success" @click.stop="$emit('create-habit')">
-        <ion-icon :icon="add"></ion-icon>
-      </ion-fab-button>
-    </template>
-
-    <template v-else-if="mode === 'list'">
-      <ion-fab-button color="primary" @click.stop="$emit('add-task')">
-        <ion-icon :icon="add"></ion-icon>
+    <template v-if="mode === 'habits' || mode === 'list'">
+      <ion-fab-button class="custom-fab-main" :color="mode === 'habits' ? 'primary' : 'primary'"
+        @click.stop="mode === 'habits' ? $emit('create-habit') : $emit('add-task')">
+        <ion-icon :icon="add" class="text-3xl"></ion-icon>
       </ion-fab-button>
     </template>
 
     <template v-else>
-      <ion-fab-button color="primary">
-        <ion-icon :icon="add"></ion-icon>
+      <ion-fab-button class="custom-fab-main" color="primary">
+        <ion-icon :icon="add" class="main-icon text-2xl"></ion-icon>
       </ion-fab-button>
 
       <ion-fab-list side="top">
-        <ion-fab-button @click="handleAction('create-single')" class="sub-fab">
+        <ion-fab-button class="custom-fab-sub" @click="handleAction('create-single')">
           <ion-icon :icon="documentText"></ion-icon>
-          <ion-label>Задача</ion-label>
         </ion-fab-button>
-        <ion-fab-button @click="handleAction('create-list')" class="sub-fab">
+
+        <ion-fab-button class="custom-fab-sub" @click="handleAction('create-list')">
           <ion-icon :icon="folderOpen"></ion-icon>
-          <ion-label>Список</ion-label>
         </ion-fab-button>
       </ion-fab-list>
     </template>
@@ -33,10 +27,9 @@
 </template>
 
 <script setup lang="ts">
-import { IonFab, IonFabButton, IonFabList, IonIcon, IonLabel } from '@ionic/vue';
+import { IonFab, IonFabButton, IonFabList, IonIcon } from '@ionic/vue';
 import { add, folderOpen, documentText } from 'ionicons/icons';
 
-// Используем 'mode', чтобы совпадало с HomePage
 defineProps<{ mode: string }>();
 const emit = defineEmits(['create-single', 'create-list', 'create-habit', 'add-task']);
 
@@ -46,56 +39,68 @@ const handleAction = (action: any) => {
 </script>
 
 <style scoped>
+/* 1. Глобальная фиксация формы для ВСЕХ FAB кнопок в этом компоненте */
 ion-fab-button {
-  --overflow: visible;
-  /* Позволяет меткам выходить за пределы круга */
+  --border-radius: 4px !important;
+  --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  /* Анимация нажатия (Ripple effect) в Ionic привязана к --border-radius, 
+     но иногда нужно явно указать его для внутреннего контейнера */
 }
 
-/* Стили для подписей к маленьким кнопкам (FAB List) */
-.sub-fab {
-  position: relative;
+/* 2. Пробиваем Shadow DOM для сохранения радиуса во всех состояниях */
+ion-fab-button::part(native) {
+  border-radius: 4px !important;
+  overflow: hidden;
+  /* Важно для обрезки эффекта волны (ripple) по углам */
 }
 
-ion-label {
-  position: absolute;
-  right: 54px;
-  /* Дистанция от кнопки влево */
-  top: 50%;
-  transform: translateY(-50%);
-  background: rgba(0, 0, 0, 0.7);
-  /* Темный фон для читаемости */
-  color: white;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 14px;
-  white-space: nowrap;
-  /* Чтобы текст не переносился */
+/* 3. Размеры основной кнопки */
+.custom-fab-main {
+  width: 56px;
+  height: 56px;
+  margin: 0;
+  --padding-start: 0;
+  --padding-end: 0;
+}
+
+/* 4. Размеры и цвет подкнопок */
+.custom-fab-sub {
+  width: 48px;
+  height: 48px;
+  --background: #3b82f6;
+  --color: white;
+}
+
+/* 5. Позиционирование списка */
+ion-fab-list {
+  margin-bottom: 60px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   pointer-events: none;
-  /* Чтобы клик проходил сквозь текст на кнопку */
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-/* Убираем стандартные стили Ionic, если они мешают */
 ion-fab-list ion-fab-button {
-  margin: 8px 0;
+  pointer-events: auto;
+  margin: 10px 0 !important;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-ion-fab-button {
-  position: relative;
+/* 6. Анимация иконки */
+.main-icon {
+  transition: transform 0.3s ease;
 }
 
-.fab-label {
-  position: absolute;
-  right: 58px;
-  /* Сдвиг влево */
-  background: #ffffff;
-  color: #000000;
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  white-space: nowrap;
-  pointer-events: none;
-  /* Чтобы клик шел на кнопку */
+ion-fab.fab-opened .main-icon {
+  transform: rotate(45deg);
+}
+
+/* 7. Каскадный вылет */
+ion-fab.fab-opened ion-fab-button:nth-child(1) {
+  transition-delay: 0.05s;
+}
+
+ion-fab.fab-opened ion-fab-button:nth-child(2) {
+  transition-delay: 0s;
 }
 </style>

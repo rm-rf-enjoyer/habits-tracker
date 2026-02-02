@@ -115,24 +115,35 @@ export const useTodoStore = defineStore('todo', () => {
   // ИСПРАВЛЕНО: Заменили todos на mainItems и вынесли ID в константу
   const setReminder = async (todoId: string, dateTime: string) => {
     const todo = mainItems.value.find(t => t.id === todoId);
-    if (!todo || !dateTime) return;
+    if (!todo) return;
 
-    const targetDate = new Date(dateTime);
-    const notificationId = parseInt(todoId.slice(-5)) || Math.floor(Math.random() * 10000);
+    // Генерируем ID уведомления на основе ID задачи
+    const notificationId = parseInt(todoId.replace(/\D/g, '').slice(-5)) || Math.floor(Math.random() * 10000);
 
+    // В любом случае сначала отменяем старое уведомление
     await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
 
-    await LocalNotifications.schedule({
-      notifications: [{
-        title: "Напоминание о задаче",
-        body: todo.text || "Пора сделать дело!",
-        id: notificationId,
-        schedule: { at: targetDate }, // Используем 'at' вместо 'on' для разового события
-        sound: 'default'
-      }]
-    });
+    if (dateTime) {
+      // Если дата передана — планируем новое
+      const targetDate = new Date(dateTime);
 
-    todo.reminderTime = dateTime;
+      await LocalNotifications.schedule({
+        notifications: [{
+          title: "Напоминание о задаче",
+          body: todo.text || todo.title || "Пора сделать дело!",
+          id: notificationId,
+          schedule: { at: targetDate },
+          sound: 'default'
+        }]
+      });
+
+      todo.reminderTime = dateTime;
+    } else {
+      // Если dateTime пустой — просто стираем время из задачи
+      todo.reminderTime = undefined; // или ''
+    }
+
+    // Сохраняем обновленное состояние (с датой или без)
     await saveToStorage();
   };
 

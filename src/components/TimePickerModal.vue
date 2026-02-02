@@ -1,37 +1,66 @@
 <template>
   <teleport to="body">
-    <div v-if="isOpen" class="modal-overlay" @mousedown.self="$emit('close')">
-      <div class="time-card iosevka-font">
-        <div class="time-header">
-          <ion-icon :icon="notificationsOutline" class="header-icon"></ion-icon>
-          <h3>REMINDER</h3>
-        </div>
+    <transition name="fade">
+      <div v-if="isOpen"
+        class="fixed inset-0 flex items-center justify-center z-[1000000] p-4 bg-black/60 backdrop-blur-sm"
+        @mousedown.self="handleCancel">
 
-        <div class="time-body">
-          <p class="time-desc">Установите дату и время</p>
+        <div class="w-full max-w-[310px] shadow-2xl font-mono p-4 border transition-colors duration-300
+                    bg-white text-zinc-900 border-zinc-200
+                    dark:bg-zinc-900 dark:text-white dark:border-zinc-800" style="border-radius: 6px !important;">
 
-          <div class="input-wrapper">
-            <input type="datetime-local" v-model="selectedTime" :min="minDateTime" class="custom-time-input"
-              :class="{ 'input-error': isPast }" />
+          <div class="flex flex-col items-center justify-center mb-3 text-center">
+            <ion-icon :icon="notificationsOutline" class="text-blue-500 text-lg mb-1"></ion-icon>
+            <h3 class="text-[9px] font-black tracking-[0.2em] uppercase opacity-60">
+              Напоминание
+            </h3>
           </div>
 
-          <p v-if="isPast" class="error-text">Дата уже прошла</p>
-        </div>
+          <div class="space-y-2 mb-4">
+            <div class="relative border transition-all duration-200 px-3 py-1.5
+                        bg-zinc-100 border-zinc-200 focus-within:border-blue-500
+                        dark:bg-zinc-800 dark:border-zinc-700 dark:focus-within:border-blue-600"
+              style="border-radius: 6px !important;" :class="{ 'border-red-500/50': isPast }">
 
-        <div class="time-footer">
-          <button class="btn-clear" @click="$emit('clear')">СБРОСИТЬ</button>
-          <div class="main-btns">
-            <button class="btn-cancel" @click="$emit('close')">ОТМЕНА</button>
-            <button class="btn-confirm" :disabled="isPast || !selectedTime" @click="handleConfirm">OK</button>
+              <input :key="isOpen ? 'open' : 'closed'" type="datetime-local" v-model="selectedTime" :min="minDateTime"
+                class="w-full bg-transparent border-none font-mono text-sm outline-none appearance-none
+                       text-zinc-900 dark:text-white" :class="{ 'text-red-500 dark:text-red-400': isPast }" />
+            </div>
+            <p v-if="isPast" class="text-[9px] text-red-500 font-bold text-center leading-none italic">
+              ⚠️ Время уже прошло
+            </p>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <div class="flex gap-1.5">
+              <button class="flex-1 h-10 flex items-center justify-center text-[10px] font-bold uppercase transition-all
+                       bg-zinc-200 text-zinc-700 active:bg-zinc-300
+                       dark:bg-zinc-800 dark:text-zinc-300 dark:active:bg-zinc-700"
+                style="border-radius: 6px !important;" @click="handleCancel">
+                Отмена
+              </button>
+              <button class="flex-1 h-10 flex items-center justify-center text-[10px] font-bold text-white uppercase transition-all
+                       bg-blue-600 active:bg-blue-700 disabled:opacity-30" style="border-radius: 6px !important;"
+                :disabled="isPast || !selectedTime" @click="handleConfirm">
+                ОК
+              </button>
+            </div>
+
+            <button class="w-full h-10 flex items-center justify-center text-[10px] font-bold uppercase transition-all
+                     bg-red-50 text-red-600 border border-red-100 active:bg-red-100
+                     dark:bg-zinc-800/40 dark:text-red-500/70 dark:border-red-500/10 dark:active:bg-red-500/10"
+              style="border-radius: 6px !important;" @click="handleClear">
+              Сбросить
+            </button>
           </div>
         </div>
       </div>
-    </div>
+    </transition>
   </teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, nextTick } from 'vue';
 import { notificationsOutline } from 'ionicons/icons';
 import { IonIcon } from '@ionic/vue';
 
@@ -40,162 +69,83 @@ const emit = defineEmits(['close', 'confirm', 'clear']);
 
 const selectedTime = ref('');
 
-const getNowString = () => {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 16);
+const toLocalISO = (dateStr: any) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
 };
 
-const minDateTime = ref(getNowString());
+const minDateTime = ref(toLocalISO(null));
 
-watch(() => props.isOpen, (open) => {
-  if (open) {
-    minDateTime.value = getNowString();
-    selectedTime.value = props.currentTime || minDateTime.value;
+watch(() => props.isOpen, async (val) => {
+  if (val) {
+    minDateTime.value = toLocalISO(null);
+    await nextTick();
+    // Если в currentTime пусто, ставим текущее время
+    selectedTime.value = props.currentTime ? toLocalISO(props.currentTime) : minDateTime.value;
   }
-});
+}, { immediate: true });
 
 const isPast = computed(() => {
   if (!selectedTime.value) return false;
+  if (props.currentTime && selectedTime.value === toLocalISO(props.currentTime)) return false;
   return selectedTime.value < minDateTime.value;
 });
 
 const handleConfirm = () => {
-  if (!isPast.value) emit('confirm', selectedTime.value);
+  if (!isPast.value && selectedTime.value) {
+    emit('confirm', selectedTime.value);
+  }
+};
+
+const handleCancel = () => {
+  emit('close');
+};
+
+// ЭТА ФУНКЦИЯ ИСПРАВЛЯЕТ ПРОБЛЕМУ
+const handleClear = () => {
+  // Сбрасываем визуально инпут в текущее время (минимальное)
+  selectedTime.value = toLocalISO(null);
+
+  // Шлем событие родителю, чтобы он почистил Store
+  emit('clear');
+
+  // ТУТ НЕ ДОЛЖНО БЫТЬ emit('close')
 };
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000000;
-  backdrop-filter: blur(8px);
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.1s ease, transform 0.1s ease;
 }
 
-.time-card {
-  background: #121212;
-  /* Темная тема в стиле Iosevka */
-  width: 90%;
-  max-width: 300px;
-  border: 1px solid #333;
-  border-radius: 8px;
-  padding: 16px;
-  color: #fff;
-  font-family: 'Iosevka', 'Iosevka NF', monospace;
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
 }
 
-.time-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+input[type="datetime-local"] {
+  color-scheme: dark;
+  min-height: 1.5rem;
 }
 
-.time-header h3 {
-  margin: 0;
-  font-size: 14px;
-  letter-spacing: 2px;
-  font-weight: 800;
-}
-
-.header-icon {
-  color: #3880ff;
-  font-size: 18px;
-}
-
-.time-desc {
-  font-size: 11px;
-  color: #888;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-}
-
-.input-wrapper {
-  background: #1a1a1a;
-  border: 1px solid #444;
-  border-radius: 4px;
-  padding: 8px;
-}
-
-.custom-time-input {
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: #fff;
-  font-family: 'Iosevka', monospace;
-  font-size: 16px;
-  /* Оптимальный размер, чтобы не "вылезало" */
-  outline: none;
-  appearance: none;
-  /* Убираем стандартные иконки в некоторых браузерах */
-}
-
-/* Стилизация календаря для Webkit браузеров */
 ::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  /* Делаем иконку календаря белой */
+  filter: invert(0.7);
   cursor: pointer;
 }
 
-.time-footer {
-  margin-top: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+input[type="datetime-local"] {
+  color-scheme: light dark;
 }
 
-.main-btns {
-  display: flex;
-  gap: 8px;
-}
-
-button {
-  font-family: 'Iosevka', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 12px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-}
-
-.btn-clear {
-  background: transparent;
-  color: #ff4961;
-  padding-left: 0;
-}
-
-.btn-cancel {
-  background: #333;
-  color: #fff;
-}
-
-.btn-confirm {
-  background: #3880ff;
-  color: #fff;
-}
-
-.btn-confirm:disabled {
-  background: #222;
-  color: #555;
-  cursor: not-allowed;
-}
-
-.error-text {
-  color: #ff4961;
-  font-size: 10px;
-  margin-top: 6px;
-}
-
-.input-error {
-  color: #ff4961;
+/* Фикс инверсии иконки для темной темы */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+  }
 }
 </style>
