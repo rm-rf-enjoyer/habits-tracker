@@ -9,7 +9,7 @@ export interface Habit {
   completedDays: string[];
   bestStreak: number;
   isPaused: boolean;
-  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  frequency: 'DAILY' | 'WEEKLY';
   notificationTime?: string;
   weekDays: number[];
   currentStreak: number;
@@ -20,11 +20,6 @@ export const useHabitStore = defineStore('habitStore', () => {
   const isInitialized = ref(false);
   const deletingIds = ref<string[]>([]);
   const activeTimers: Record<string, ReturnType<typeof setTimeout>> = {};
-
-  let streak = 0;
-  let checkDate = new Date();
-  const toStr = (d: Date) => d.toISOString().split('T')[0];
-
 
   const getTodayStr = () => {
     const d = new Date();
@@ -92,7 +87,6 @@ export const useHabitStore = defineStore('habitStore', () => {
     };
 
     let streak = 0;
-    let curr = new Date(); // Начинаем проверку от "сейчас"
 
     if (habit.frequency === 'DAILY') {
       // Твоя текущая логика для ежедневных
@@ -101,8 +95,16 @@ export const useHabitStore = defineStore('habitStore', () => {
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-      if (!habit.isPaused && !days.includes(todayStr) && !days.includes(yesterdayStr)) return { current: 0 };
 
+      // ЛОГИКА "24 ЧАСА":
+      // Если сегодня нет отметки И вчера нет отметки, 
+      // и при этом привычка не на паузе — стрик обнуляется.
+      // Это и дает те самые ~24-48 часов (весь сегодняшний и весь вчерашний день) на "подумать".
+      if (!habit.isPaused && !days.includes(todayStr) && !days.includes(yesterdayStr)) {
+        return { current: 0 };
+      }
+
+      // Если проверка пройдена, считаем длину непрерывной цепи
       let checkDate = new Date(habit.isPaused ? days[0] : (days.includes(todayStr) ? todayStr : yesterdayStr));
 
       for (let i = 0; i < 365; i++) {
@@ -110,35 +112,11 @@ export const useHabitStore = defineStore('habitStore', () => {
         if (days.includes(s)) {
           streak++;
           checkDate.setDate(checkDate.getDate() - 1);
-        } else { break; }
-      }
-      if (habit.frequency === 'DAILY') {
-        const todayStr = getTodayStr();
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-        // ЛОГИКА "24 ЧАСА":
-        // Если сегодня нет отметки И вчера нет отметки, 
-        // и при этом привычка не на паузе — стрик обнуляется.
-        // Это и дает те самые ~24-48 часов (весь сегодняшний и весь вчерашний день) на "подумать".
-        if (!habit.isPaused && !days.includes(todayStr) && !days.includes(yesterdayStr)) {
-          return { current: 0 };
+        } else {
+          // Если пропустили день — стрик прерывается здесь
+          break;
         }
 
-        // Если проверка пройдена, считаем длину непрерывной цепи
-        let checkDate = new Date(habit.isPaused ? days[0] : (days.includes(todayStr) ? todayStr : yesterdayStr));
-
-        for (let i = 0; i < 365; i++) {
-          const s = checkDate.toISOString().split('T')[0];
-          if (days.includes(s)) {
-            streak++;
-            checkDate.setDate(checkDate.getDate() - 1);
-          } else {
-            // Если пропустили день — стрик прерывается здесь
-            break;
-          }
-        }
       }
     }
 
@@ -146,7 +124,6 @@ export const useHabitStore = defineStore('habitStore', () => {
       // НОВАЯ ЛОГИКА: Считаем по неделям
       let currentWeekStart = getStartOfWeek(new Date());
       let lastCompletedDay = days[0];
-      let lastCompletedWeekStart = getStartOfWeek(new Date(lastCompletedDay));
 
       // Если на этой неделе пусто И на прошлой неделе пусто — стрик сгорел
       // (кроме случая паузы)
@@ -193,7 +170,7 @@ export const useHabitStore = defineStore('habitStore', () => {
     }
   };
 
-  const addHabit = async (name: string, frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' = 'DAILY') => {
+  const addHabit = async (name: string, frequency: 'DAILY' | 'WEEKLY' = 'DAILY') => {
     const newHabit: Habit = {
       id: Date.now().toString(),
       name,
@@ -256,9 +233,6 @@ export const useHabitStore = defineStore('habitStore', () => {
     } else if (habit.frequency === 'WEEKLY') {
       scheduleOptions.repeats = true;
       scheduleOptions.every = 'week';
-    } else if (habit.frequency === 'MONTHLY') {
-      scheduleOptions.repeats = true;
-      scheduleOptions.every = 'month';
     }
 
     await LocalNotifications.schedule({

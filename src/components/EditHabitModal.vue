@@ -1,113 +1,135 @@
 <template>
-  <ion-modal :is-open="isOpen" @didDismiss="$emit('close')" :initial-breakpoint="0.75" :breakpoints="[0, 0.5, 0.75, 1]">
-    <ion-header>
-      <ion-toolbar>
-        <ion-title>Управление привычкой</ion-title>
-        <ion-buttons slot="end">
-          <ion-button @click="$emit('close')">Закрыть</ion-button>
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-header>
+  <teleport to="body">
+    <div v-if="isOpen"
+      class="fixed inset-0 w-screen h-screen flex items-start justify-center z-[9999999] p-4 bg-black/40 backdrop-blur-[4px] font-mono"
+      @mousedown.self="$emit('close')">
 
-    <ion-content class="ion-padding">
-      <ion-item lines="none" class="custom-input-item">
-        <ion-textarea ref="inputRef" v-model="editedHabitName" placeholder="Название привычки..."
-          auto-grow></ion-textarea>
-      </ion-item>
+      <div
+        class="w-full max-w-[400px] mt-[calc(env(safe-area-inset-top,20px)+35px)] p-5 flex flex-col shadow-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+        style="border-radius: 6px !important;">
 
-      <div class="section-container">
-        <ion-label class="custom-label">ИСТОРИЯ И АВАНСЫ</ion-label>
-        <div class="history-grid">
-          <div v-for="day in lastSevenDays" :key="day.dateStr" class="day-box" :class="{
-            'is-done': isDayCompleted(day.dateStr),
-            'is-scheduled': weekDaysInternal.includes(day.dayNum)
-          }" @click="handleToggleDate(day.dateStr)">
-            <span class="day-letter">{{ day.label }}</span>
-            <div class="status-indicator"></div>
+        <div class="mb-3 flex items-center justify-center">
+          <h3 class="text-[9px] font-black uppercase text-zinc-400 dark:text-zinc-500 whitespace-nowrap tracking-tight">
+            НАСТРОЙКА ПРИВЫЧКИ
+          </h3>
+        </div>
+
+        <div class="mb-4">
+          <textarea ref="inputRef" v-model="editedHabitName" placeholder="Название..."
+            class="w-full h-20 p-3 text-sm leading-relaxed outline-none transition-all resize-none appearance-none bg-zinc-50 dark:bg-zinc-800/50 text-zinc-800 dark:text-white border border-zinc-200 dark:border-zinc-700 focus:border-blue-500 dark:focus:border-blue-600 font-mono"
+            style="border-radius: 6px !important;"></textarea>
+        </div>
+
+        <div class="mb-4 grid grid-cols-7 gap-1">
+          <div v-for="day in lastSevenDays" :key="day.dateStr" @click="handleToggleDate(day.dateStr)" :class="[
+            'flex flex-col items-center justify-center py-2 border transition-all cursor-pointer active:scale-90',
+            isDayCompleted(day.dateStr)
+              ? 'bg-blue-600 border-blue-600 text-white'
+              : 'bg-transparent border-zinc-100 dark:border-zinc-800 text-zinc-400'
+          ]" style="border-radius: 4px !important;">
+            <span class="text-[8px] font-bold uppercase mb-0.5">{{ day.label }}</span>
+            <div
+              :class="['w-1 h-1 rounded-full', isDayCompleted(day.dateStr) ? 'bg-white' : 'bg-zinc-300 dark:bg-zinc-700']">
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="section-container">
-        <ion-label class="custom-label">ДНИ ВЫПОЛНЕНИЯ</ion-label>
-        <div class="week-selector">
-          <button v-for="(label, index) in ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']" :key="index" class="week-btn"
-            :class="{ 'active': weekDaysInternal.includes(index) }" @click="toggleDayInPlan(index)">
-            {{ label }}
+        <div v-if="currentHabit?.frequency === 'WEEKLY'" class="mb-4">
+          <div class="flex gap-1">
+            <button v-for="(label, index) in ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']" :key="index"
+              @click="toggleDayInPlan(index)" :class="[
+                'flex-1 py-3 text-[9px] font-black border transition-all',
+                weekDaysInternal.includes(index)
+                  ? 'bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 border-transparent'
+                  : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700'
+              ]" style="border-radius: 4px !important;">
+              {{ label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <div @click="isPausedInternal = !isPausedInternal"
+            class="flex items-center justify-between p-3 border border-zinc-100 dark:border-zinc-800 cursor-pointer bg-zinc-50 dark:bg-zinc-800/20 shadow-sm transition-all active:bg-zinc-100 dark:active:bg-zinc-800/40"
+            style="border-radius: 6px !important;">
+            <span class="text-[9px] font-black text-zinc-400 uppercase tracking-tight">ЗАМОРОЗКА СТРИКА</span>
+            <div
+              :class="['w-8 h-4 transition-all relative', isPausedInternal ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-700']"
+              style="border-radius: 10px !important;">
+              <div :class="['absolute top-1 w-2 h-2 bg-white transition-all', isPausedInternal ? 'left-5' : 'left-1']"
+                style="border-radius: 50% !important;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button @click="$emit('close')"
+            class="h-11 text-[10px] font-bold tracking-wider uppercase bg-zinc-100 dark:bg-zinc-800 text-zinc-500 active:bg-zinc-200 dark:active:bg-zinc-700"
+            style="border-radius: 6px !important;">
+            ОТМЕНА
+          </button>
+          <button @click="handleSave"
+            class="h-11 text-[10px] font-bold tracking-wider uppercase bg-blue-600 text-white active:bg-blue-700 shadow-md shadow-blue-500/20"
+            style="border-radius: 6px !important;">
+            СОХРАНИТЬ
           </button>
         </div>
       </div>
-
-      <ion-item lines="full" class="ion-margin-top">
-        <ion-label>Заморозить стрик</ion-label>
-        <ion-toggle :checked="isPausedInternal" @ionChange="isPausedInternal = $event.detail.checked"></ion-toggle>
-      </ion-item>
-
-      <ion-button expand="block" class="ion-margin-top" @click="handleSave">
-        Сохранить изменения
-      </ion-button>
-    </ion-content>
-  </ion-modal>
+    </div>
+  </teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue';
-import { useHabitStore, type Habit } from '../stores/habitStore';
+import { ref, watch, computed } from 'vue';
+import { useHabitStore } from '../stores/habitStore';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import {
-  IonModal, IonHeader, IonToolbar, IonTitle, IonButtons,
-  IonButton, IonContent, IonItem, IonTextarea, IonLabel, IonToggle
-} from '@ionic/vue';
 
-const props = defineProps<{
-  isOpen: boolean;
-  habitId: string | null;
-}>();
-
+const props = defineProps<{ isOpen: boolean; habitId: string | null; }>();
 const emit = defineEmits(['close']);
 const habitStore = useHabitStore();
 
 const editedHabitName = ref('');
 const isPausedInternal = ref(false);
-const notificationTimeInternal = ref('');
 const weekDaysInternal = ref<number[]>([]);
-const inputRef = ref<any>(null);
+const inputRef = ref<HTMLTextAreaElement | null>(null);
+
+// Ищем привычку в сторе
+const currentHabit = computed(() => {
+  if (!props.habitId) return null;
+  return habitStore.habits.find(h => h.id === props.habitId) || null;
+});
 
 const isDayCompleted = (dateStr: string) => {
-  const habit = habitStore.habits.find(h => h.id === props.habitId);
-  return habit?.completedDays?.includes(dateStr) || false;
+  return currentHabit.value?.completedDays?.includes(dateStr) || false;
 };
 
+// Генерация списка дней для сетки истории
 const lastSevenDays = computed(() => {
   const days = [];
+  const labels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     days.push({
       dateStr: d.toISOString().split('T')[0],
-      label: d.toLocaleDateString('ru-RU', { weekday: 'short' }),
-      dayNum: d.getDay()
+      label: labels[d.getDay()]
     });
   }
   return days;
 });
 
-watch(() => [props.isOpen, props.habitId], ([open, id]) => {
-  if (open && id) {
-    const habit = habitStore.habits.find(h => h.id === id as string);
-    if (habit) {
-      editedHabitName.value = habit.name;
-      isPausedInternal.value = habit.isPaused;
-      notificationTimeInternal.value = habit.notificationTime || '';
-      weekDaysInternal.value = [...(habit.weekDays || [])];
-    }
-    nextTick(() => { setTimeout(() => inputRef.value?.$el.querySelector('textarea')?.focus(), 150); });
+// Синхронизация данных при открытии модалки
+watch(() => [props.isOpen, props.habitId], ([open]) => {
+  if (open && currentHabit.value) {
+    editedHabitName.value = currentHabit.value.name;
+    isPausedInternal.value = currentHabit.value.isPaused;
+    weekDaysInternal.value = [...(currentHabit.value.weekDays || [])];
   }
 }, { immediate: true });
 
-const handleToggleDate = async (dateStr: string) => {
+const handleToggleDate = (dateStr: string) => {
   if (!props.habitId) return;
-  await Haptics.impact({ style: ImpactStyle.Light });
+  Haptics.impact({ style: ImpactStyle.Light });
   habitStore.toggleHabit(props.habitId, dateStr);
 };
 
@@ -122,79 +144,8 @@ const handleSave = async () => {
   await habitStore.updateHabit(props.habitId, {
     name: editedHabitName.value.trim(),
     isPaused: isPausedInternal.value,
-    notificationTime: notificationTimeInternal.value,
     weekDays: weekDaysInternal.value
   });
   emit('close');
 };
 </script>
-
-<style scoped>
-/* Стили копируем из CreateListModal.vue / CreateTaskModal.vue */
-.iosevka-font {
-  font-family: 'Iosevka', 'Iosevka NF', monospace;
-}
-
-.section-container {
-  margin: 20px 0;
-}
-
-.custom-label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--ion-color-medium);
-  letter-spacing: 0.05em;
-  margin-bottom: 10px;
-  display: block;
-}
-
-.history-grid {
-  display: flex;
-  justify-content: space-between;
-  gap: 4px;
-}
-
-.day-box {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px 0;
-  background: var(--ion-color-light);
-  border-radius: 8px;
-  transition: 0.2s;
-}
-
-.day-box.is-scheduled {
-  border: 1px solid var(--ion-color-primary);
-  background: transparent;
-}
-
-.day-box.is-done .status-indicator {
-  background: var(--ion-color-primary);
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  box-shadow: 0 0 8px var(--ion-color-primary);
-}
-
-.week-selector {
-  display: flex;
-  justify-content: space-between;
-  gap: 4px;
-}
-
-.week-btn {
-  flex: 1;
-  padding: 8px 0;
-  border-radius: 6px;
-  border: 1px solid var(--ion-color-light);
-  background: white;
-  font-size: 0.7rem;
-}
-
-.week-btn.active {
-  background: var(--ion-color-dark);
-  color: white;
-}
-</style>

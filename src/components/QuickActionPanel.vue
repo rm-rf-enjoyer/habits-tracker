@@ -1,33 +1,50 @@
 <template>
   <teleport to="body">
-    <transition name="slide-down">
-      <div v-if="isOpen" class="panel-wrapper">
-        <div class="panel-body">
+    <transition enter-active-class="transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+      enter-from-class="-translate-y-full opacity-0" enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition duration-200 ease-in" leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="-translate-y-full opacity-0">
+      <div v-if="isOpen"
+        class="fixed top-0 left-0 right-0 flex justify-center z-[999999] pointer-events-none pt-[calc(env(safe-area-inset-top,20px)+25px)] font-mono">
 
-          <div v-if="isHabit" class="btn" @click.stop="$emit('action', 'edit')">
-            <ion-icon :icon="pencilOutline"></ion-icon> <span>EDIT</span>
-          </div>
-          <div v-else class="btn" @click.stop="$emit('action', 'pin')">
-            <ion-icon :icon="pinOutline"></ion-icon>
-            <span>PIN</span>
-          </div>
+        <div
+          class="pointer-events-auto bg-black dark:bg-zinc-900 h-[52px] w-[94%] max-w-[380px] rounded-xl flex items-center justify-around shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-zinc-800">
 
-          <div class="btn" @click.stop="$emit('action', 'remind')">
-            <ion-icon :icon="notificationsOutline"></ion-icon>
-            <span>NOTIF</span>
-          </div>
+          <button v-if="isHabit" @click.stop="$emit('action', 'edit')"
+            class="flex flex-col items-center justify-center flex-1 text-white active:scale-90 transition-transform">
+            <ion-icon :icon="pencilOutline" class="text-[18px]"></ion-icon>
+            <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">Edit</span>
+          </button>
 
-          <div class="btn del" @click.stop="$emit('action', 'delete')">
-            <ion-icon :icon="trashOutline"></ion-icon>
-            <span>DEL</span>
-          </div>
+          <button v-else @click.stop="$emit('action', isPinned ? 'unpin' : 'pin')"
+            class="flex flex-col items-center justify-center flex-1 active:scale-90 transition-all"
+            :class="isPinned ? 'text-blue-400' : 'text-white'">
+            <ion-icon :icon="isPinned ? bookmark : bookmarkOutline" class="text-[18px]"></ion-icon>
+            <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">
+              {{ isPinned ? 'Fixed' : 'Pin' }}
+            </span>
+          </button>
 
-          <div class="divider"></div>
+          <button @click.stop="$emit('action', 'remind')"
+            class="flex flex-col items-center justify-center flex-1 text-white active:scale-90 transition-transform">
+            <ion-icon :icon="notificationsOutline" class="text-[18px]"></ion-icon>
+            <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">Notif</span>
+          </button>
 
-          <div class="btn close" @click.stop="$emit('close')">
-            <ion-icon :icon="closeOutline"></ion-icon>
-            <span>EXIT</span>
-          </div>
+          <button @click.stop="$emit('action', 'delete')"
+            class="flex flex-col items-center justify-center flex-1 text-red-500 active:scale-90 transition-transform">
+            <ion-icon :icon="trashOutline" class="text-[18px]"></ion-icon>
+            <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">Del</span>
+          </button>
+
+          <div class="w-[1px] h-5 bg-zinc-800 mx-1"></div>
+
+          <button @click.stop="$emit('close')"
+            class="flex flex-col items-center justify-center flex-1 text-zinc-500 active:scale-90 transition-transform">
+            <ion-icon :icon="closeOutline" class="text-[18px]"></ion-icon>
+            <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">Exit</span>
+          </button>
+
         </div>
       </div>
     </transition>
@@ -37,93 +54,19 @@
 <script setup lang="ts">
 import { IonIcon } from '@ionic/vue';
 import {
-  pinOutline,
+  bookmarkOutline, // Контурная закладка (Pin)
+  bookmark,        // Залитая закладка (Pinned)
   notificationsOutline,
   trashOutline,
   closeOutline,
-  pencilOutline // ИМПОРТИРУЕМ КАРАНДАШ
+  pencilOutline
 } from 'ionicons/icons';
 
 defineProps<{
-  isOpen: boolean,
-  isHabit?: boolean
+  isOpen: boolean;
+  isHabit?: boolean;
+  isPinned?: boolean; // Новое свойство для логики подмены
 }>();
 
 defineEmits(['action', 'close']);
 </script>
-
-<style scoped>
-/* Стили остаются без изменений */
-.panel-wrapper {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  z-index: 999999;
-  padding-top: calc(env(safe-area-inset-top, 20px) + 25px);
-  pointer-events: none;
-  font-family: 'Iosevka', 'Iosevka NF', monospace;
-}
-
-.panel-body {
-  pointer-events: auto;
-  background: #000000;
-  height: 52px;
-  width: 94%;
-  max-width: 360px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-  border: 1px solid #333;
-}
-
-.btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: #ffffff;
-  gap: 2px;
-  flex: 1;
-  font-family: 'Iosevka Nerd Font', monospace;
-  cursor: pointer;
-}
-
-.btn ion-icon {
-  font-size: 18px;
-}
-
-.btn span {
-  font-size: 10px;
-  font-weight: 800;
-  margin-top: 2px;
-}
-
-.btn.del {
-  color: #ff4961;
-}
-
-.btn.close {
-  color: #888;
-}
-
-.divider {
-  width: 1px;
-  height: 20px;
-  background: #333;
-}
-
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
-}
-
-.slide-down-enter-from,
-.slide-down-leave-to {
-  transform: translateY(-120%);
-  opacity: 0;
-}
-</style>
