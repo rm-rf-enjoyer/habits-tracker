@@ -15,7 +15,8 @@
         </div>
 
         <div class="mb-5">
-          <input ref="inputRef" v-model="habitName" type="text" placeholder="Напр: Зарядка, Чтение..."
+          <input ref="inputRef" :value="habitName" @input="habitName = ($event.target as HTMLInputElement).value"
+            type="text" placeholder="Напр: Зарядка, Чтение..."
             class="w-full h-11 px-4 text-sm outline-none appearance-none bg-zinc-50 dark:bg-zinc-800/50 text-zinc-800 dark:text-white border border-zinc-200 dark:border-zinc-700 focus:border-blue-500 dark:focus:border-blue-600 font-mono"
             style="border-radius: 4px !important;" @keyup.enter="handleCreate" />
         </div>
@@ -63,8 +64,8 @@
             style="border-radius: 4px !important;">
             ОТМЕНА
           </button>
-          <button type="button" @click="handleCreate" :disabled="!habitName.trim()"
-            class="h-11 text-[10px] font-black uppercase bg-blue-600 text-white active:bg-blue-700 shadow-md shadow-blue-500/20 disabled:opacity-50"
+          <button type="button" @click="handleCreate" :disabled="!isFormValid"
+            class="h-11 text-[10px] font-black uppercase bg-blue-600 text-white active:bg-blue-700 shadow-md shadow-blue-500/20 disabled:opacity-30 disabled:grayscale-[0.5]"
             style="border-radius: 4px !important;">
             СОЗДАТЬ
           </button>
@@ -75,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -136,4 +137,14 @@ const handleCreate = () => {
     }, 100);
   }
 }
+
+const isFormValid = computed(() => {
+  const nameOk = habitName.value && habitName.value.trim().length > 0;
+
+  if (frequency.value === 'DAILY') {
+    return !!nameOk; // Превращаем в чистый boolean
+  }
+
+  return !!nameOk && selectedDays.value.length > 0;
+});
 </script>

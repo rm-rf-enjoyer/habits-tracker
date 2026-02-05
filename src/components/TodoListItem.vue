@@ -1,15 +1,14 @@
 <template>
-  <div class="item-wrapper relative">
-    <div :style="itemStyle" :class="{ 'opacity-0 pointer-events-none': isDeleting }"
-      @touchstart="$emit('touchstart', $event)" @touchend="$emit('touchend')" @touchmove="$emit('touchmove')"
-      @click="$emit('click', $event)">
+  <div class="item-wrapper relative flex flex-col gap-1.5">
+    <div :style="itemStyle" class="visual-card relative" @touchstart="$emit('touchstart', $event)"
+      @touchend="$emit('touchend')" @touchmove="$emit('touchmove')" @click="$emit('click', $event)">
+
       <template v-if="!item.items && !item.title">
         <span :style="taskTextStyle">{{ item.text }}</span>
       </template>
-
       <template v-else>
         <div class="flex flex-col">
-          <div class="flex items-center justify-between" @click.stop="$emit('open-list', item.id)">
+          <div class="flex items-center justify-between" @click.stop="handleHeaderClick">
             <div class="flex items-center gap-2">
               <div class="indicator-bar"></div>
               <span class="item-title">{{ item.title }}</span>
@@ -19,20 +18,21 @@
               <ion-icon :icon="chevronForwardOutline" class="chevron-icon"></ion-icon>
             </div>
           </div>
-
-          <div v-if="item.items && item.items.length > 0" class="subtasks-container">
-            <div v-for="subTask in item.items" :key="subTask.id" class="flex items-center gap-1.5 py-0">
-              <span class="subtask-dash">-</span>
+          <div v-if="item.items && item.items.length > 0"
+            class="subtasks-preview mt-1 pl-2 border-l-2 border-zinc-100 dark:border-zinc-800 ml-0.5">
+            <div v-for="subTask in item.items.slice(0, 3)" :key="subTask.id" class="flex items-center gap-1.5 h-4">
               <span :style="getSubTaskTextStyle(subTask.completed)">{{ subTask.text }}</span>
             </div>
           </div>
         </div>
       </template>
-    </div>
 
-    <div v-if="isDeleting" class="delete-overlay-layer" @click="$emit('cancel-delete', item.id)">
-      <div class="delete-progress-line"></div>
-      <span class="delete-hint">ОТМЕНИТЬ УДАЛЕНИЕ</span>
+      <div v-if="isDeleting" class="delete-overlay-layer"
+        style="position: absolute; inset: 0; z-index: 50; background: var(--card-bg); display: flex; align-items: center; justify-content: center;"
+        @click.stop="$emit('cancel-delete', item.id)">
+        <div class="delete-progress-line"></div>
+        <span class="delete-hint">ОТМЕНИТЬ УДАЛЕНИЕ</span>
+      </div>
     </div>
   </div>
 </template>
@@ -43,14 +43,18 @@ import { IonIcon } from '@ionic/vue';
 import { chevronForwardOutline } from 'ionicons/icons';
 // Импортируем тип с префиксом type, чтобы не было конфликта с названием компонента
 import type { TodoItem } from '../stores/todoStore';
+import { useTodoStore } from '../stores/todoStore';
 
 const props = defineProps<{
   item: TodoItem;
   isSelected: boolean;
   isDeleting: boolean;
+  isSelectionModeActive: boolean;
 }>();
 
-defineEmits<{
+const todoStore = useTodoStore();
+
+const emit = defineEmits<{
   (e: 'touchstart', event: TouchEvent): void;
   (e: 'touchend'): void;
   (e: 'touchmove'): void;
@@ -59,14 +63,32 @@ defineEmits<{
   (e: 'cancel-delete', id: string): void;
 }>();
 
-const itemStyle = computed((): CSSProperties => ({
-  border: '1px solid ' + (props.isSelected ? '#3880ff' : 'var(--border-color)'),
-  borderRadius: '4px',
-  padding: '6px 12px',
-  backgroundColor: props.isSelected ? 'var(--selected-bg)' : 'var(--card-bg)',
-  display: 'block',
-  position: 'relative'
-}));
+const itemStyle = computed((): CSSProperties => {
+  // ОШИБКА 1: Было .emultiSelectedIds (лишняя буква 'e')
+  // ОШИБКА 2: Убедись, что todoStore импортирован и инициализирован в этом компоненте
+  const isSelected = props.isSelected || todoStore.multiSelectedIds.includes(props.item.id);
+
+  const activeBorder = '#3880ff';
+  const normalBorder = 'var(--border-color, #e4e4e7)';
+  const bgSelected = 'rgba(56, 128, 255, 0.12)';
+  const bgNormal = 'var(--card-bg, transparent)';
+
+  return {
+    display: 'block',
+    position: 'relative',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: `1.5px solid ${isSelected ? activeBorder : normalBorder}`,
+    backgroundColor: isSelected ? bgSelected : bgNormal,
+    boxShadow: isSelected
+      ? '0 4px 12px rgba(56, 128, 255, 0.15)'
+      : 'none',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    overflow: 'hidden',
+    // В JS/TS свойства с дефисом пишутся в camelCase или в кавычках
+    WebkitTapHighlightColor: 'transparent'
+  };
+});
 
 const taskTextStyle = computed((): CSSProperties => ({
   textDecoration: props.item.completed ? 'line-through' : 'none',
@@ -82,6 +104,23 @@ const getSubTaskTextStyle = (completed: boolean): CSSProperties => ({
   textDecoration: completed ? 'line-through' : 'none',
   opacity: completed ? 0.5 : 0.9
 });
+
+const handleHeaderClick = (event: MouseEvent) => {
+  if (props.isSelectionModeActive) {
+    // В режиме выбора header-click не должен делать ничего особенного,
+    // пусть событие всплывает к родителю
+    return;
+  }
+
+  if (!props.isDeleting) {
+    // ОСТАНАВЛИВАЕМ всплытие только если мы НЕ в режиме выбора
+    // чтобы не сработал toggleTask
+    event.stopPropagation();
+    emit('open-list', props.item.id);
+  }
+};
+
+
 </script>
 
 <style scoped>

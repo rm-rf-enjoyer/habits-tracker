@@ -1,11 +1,16 @@
 <template>
   <div class="min-h-screen p-2 bg-white dark:bg-zinc-950 font-iosevka select-none transition-colors duration-300">
 
+    <QuickActionPanel :is-open="internalSelectedId !== null" :is-pinned="false" mode="habit" @action="handleHabitAction"
+      @close="internalSelectedId = null" />
+
+    <HabitEditModal :is-open="isEditModalOpen" :habit-id="internalSelectedId" @close="isEditModalOpen = false" />
+
     <draggable v-model="habitsList" item-key="id" v-bind="dragOptions" class="flex flex-col gap-1.5" @end="onDragEnd">
       <template #item="{ element }">
         <HabitItem :habit="element" :is-selected="internalSelectedId === element.id"
           :is-deleting="habitStore.deletingIds.includes(element.id)" @touchstart="handleTouchStart(element)"
-          @touchend="handleTouchEnd" @touchmove="handleTouchMove" @click="handleHabitClick"
+          @touchend="handleTouchEnd" @touchmove="handleTouchMove" @click="handleHabitClick(element)"
           @cancel-delete="id => habitStore.cancelDeletion(id)" />
       </template>
     </draggable>
@@ -17,6 +22,8 @@ import { ref, computed } from 'vue';
 import { useHabitStore, type Habit } from '../stores/habitStore';
 import draggable from 'vuedraggable';
 import HabitItem from './HabitItem.vue';
+import QuickActionPanel from './QuickActionPanel.vue';
+import HabitEditModal from './EditHabitModal.vue';
 
 const habitStore = useHabitStore();
 const emit = defineEmits(['selection-change', 'open-manage']);
@@ -24,6 +31,7 @@ const emit = defineEmits(['selection-change', 'open-manage']);
 const internalSelectedId = ref<string | null>(null);
 const touchTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const isScrolling = ref(false);
+const isEditModalOpen = ref(false);
 
 // Работаем со списком из стора
 const habitsList = computed<Habit[]>({
@@ -38,6 +46,21 @@ const dragOptions = {
   delayOnTouchOnly: true,
   ghostClass: 'opacity-0',
   forceFallback: true
+};
+
+const handleHabitAction = (action: string) => {
+  if (!internalSelectedId.value) return;
+
+  if (action === 'delete') {
+    habitStore.startDelayedRemove(internalSelectedId.value);
+    internalSelectedId.value = null; // Закрываем панель
+  }
+  else if (action === 'pin' || action === 'edit') {
+    // Если в QuickActionPanel кнопка вызывает 'pin' или 'edit'
+    isEditModalOpen.value = true;
+    // Панель закроется сама, так как модалка перекроет экран, 
+    // либо можно обнулить internalSelectedId в handleSave модалки
+  }
 };
 
 // Логика выделения (Long Press) — копия из TodoListPage
@@ -64,25 +87,16 @@ const handleTouchEnd = () => {
 
 // Клик по привычке
 const handleHabitClick = (element: Habit) => {
-  // Если есть выделенный элемент — снимаем выделение
   if (internalSelectedId.value) {
     internalSelectedId.value = null;
     emit('selection-change', null);
     return;
   }
 
+  // Убираем проверку на "сегодняшний день" для теста. 
+  // Если нажали — значит хотим отметить!
   const todayStr = habitStore.getTodayStr();
-  const dayOfWeek = new Date().getDay();
-  // Проверяем, активна ли привычка сегодня (входит ли текущий день в weekDays)
-  const isScheduledForToday = (element.weekDays || []).includes(dayOfWeek);
-
-  if (isScheduledForToday) {
-    // Если по привычке нужно работать сегодня — чекаем её
-    habitStore.toggleHabit(element.id, todayStr);
-  } else {
-    // Если сегодня не её день — открываем управление (или игнорируем)
-    emit('open-manage', element);
-  }
+  habitStore.toggleHabit(element.id, todayStr);
 };
 
 const onDragEnd = () => {

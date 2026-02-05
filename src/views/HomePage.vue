@@ -1,7 +1,7 @@
 <template>
   <ion-page>
-    <QuickActionPanel :is-open="!!todoStore.selectedId || !!selectedHabitId" :is-habit="!!selectedHabitId"
-      @action="handlePanelAction" @close="closePanels" />
+    <QuickActionPanel :is-open="todoStore.multiSelectedIds.length > 0" :is-pinned="isFirstSelectedPinned"
+      @action="handleBulkAction" @close="todoStore.clearSelection()" />
 
     <EditHabitModal v-if="isEditModalOpen" :is-open="isEditModalOpen" :habit-id="selectedHabitId"
       @close="isEditModalOpen = false; closePanels();" />
@@ -10,7 +10,7 @@
       @close="isTimePickerOpen = false" @confirm="confirmTime" @clear="clearTime" />
 
     <header class="bg-[var(--ion-background-color)] flex flex-col relative z-[1000] transition-all duration-300"
-      :class="{ 'opacity-0 invisible -translate-y-2': todoStore.selectedId }">
+      :class="{ 'opacity-0 invisible -translate-y-2 pointer-events-none': todoStore.multiSelectedIds.length > 0 }">
       <div class="h-[40px]"></div>
 
       <div class="pb-2 flex justify-center">
@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { IonPage, IonContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/vue';
 import { useRouter } from 'vue-router'; // 1. Импортируем роутер
 import { useTodoStore } from '../stores/todoStore';
@@ -74,11 +74,10 @@ const targetListId = ref<string | null>(null);
 const selectedHabitId = ref<string | null>(null);
 const isEditModalOpen = ref(false);
 const isTimePickerOpen = ref(false);
-const currentTimeForPicker = ref('');
 
 // 1. Сброс всех выделений
 const closePanels = () => {
-  todoStore.selectedId = null;
+  todoStore.clearSelection();
   selectedHabitId.value = null;
 };
 
@@ -87,7 +86,69 @@ onMounted(async () => {
   await LocalNotifications.requestPermissions();
 });
 
-const addNewHabit = async (habitData: { name: string, frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' }) => {
+const isFirstSelectedPinned = computed(() => {
+  if (todoStore.multiSelectedIds.length === 0) return false;
+  const firstId = todoStore.multiSelectedIds[0];
+  const item = todoStore.mainItems.find(i => i.id === firstId);
+  return item?.isPinned || false;
+});
+
+const handleBulkAction = async (action: string) => {
+  const ids = [...todoStore.multiSelectedIds];
+
+  if (action === 'remind') {
+    isTimePickerOpen.value = true;
+    return;
+  }
+
+  if (action === 'edit') {
+    isEditModalOpen.value = true;
+    return;
+  }
+
+  if (action === 'delete') {
+    if (selectedHabitId.value) {
+      habitStore.startDelayedRemove(selectedHabitId.value);
+    } else {
+      ids.forEach(id => todoStore.startDelayedRemove(id));
+    }
+  }
+
+  if (action === 'pin' || action === 'unpin') {
+    if (ids.length > 0) {
+      ids.forEach(id => todoStore.togglePin(id));
+    }
+  }
+
+  closePanels();
+};
+
+const confirmTime = async (time: string) => {
+  if (selectedHabitId.value) {
+    // Если выбрана привычка
+    await habitStore.updateHabit(selectedHabitId.value, { notificationTime: time });
+  } else {
+    // Массовое напоминание для ВСЕХ выбранных задач
+    for (const id of todoStore.multiSelectedIds) {
+      await todoStore.setReminder(id, time);
+    }
+  }
+
+  isTimePickerOpen.value = false;
+  closePanels(); // Сбрасываем выделение только после сохранения
+};
+
+const clearTime = async () => {
+  if (selectedHabitId.value) {
+    await habitStore.updateHabit(selectedHabitId.value, { notificationTime: '' });
+  } else {
+    for (const id of todoStore.multiSelectedIds) {
+      await todoStore.setReminder(id, '');
+    }
+  }
+};
+
+const addNewHabit = async (habitData: { name: string, frequency: 'DAILY' | 'WEEKLY' }) => {
   // Теперь TypeScript видит, что frequency существует в объекте habitData
   await habitStore.addHabit(habitData.name, habitData.frequency);
   showHabitModal.value = false;
@@ -109,71 +170,22 @@ const closeTaskModal = () => {
   targetListId.value = null;
 };
 
-const handlePanelAction = (action: string) => {
-  if (action === 'remind') {
-    // Находим актуальное время ПЕРЕД открытием модалки
-    if (selectedHabitId.value) {
-      const h = habitStore.habits.find(h => h.id === selectedHabitId.value);
-      currentTimeForPicker.value = h?.notificationTime || '';
-    } else if (todoStore.selectedId) {
-      // Ищем задачу во всех списках mainItems
-      const t = todoStore.mainItems.find(t => t.id === todoStore.selectedId);
-      currentTimeForPicker.value = t?.reminderTime || '';
-    }
-
-    isTimePickerOpen.value = true;
-    return; // НЕ закрываем панели, иначе потеряем ID задачи
-  }
-
-  // Для остальных действий (edit, delete, pin)
-  if (action === 'edit') {
-    isEditModalOpen.value = true;
-    return;
-  }
-
-  if (action === 'delete') {
-    if (selectedHabitId.value) {
-      habitStore.startDelayedRemove(selectedHabitId.value);
-    } else if (todoStore.selectedId) {
-      todoStore.startDelayedRemove(todoStore.selectedId);
-    }
-  }
-
-  if (action === 'pin' && todoStore.selectedId) {
-    todoStore.togglePin(todoStore.selectedId);
-  }
-
-  closePanels();
-};
-
-const confirmTime = async (time: string) => {
-  // Сначала сохраняем данные в Store
+const currentTimeForPicker = computed(() => {
+  // Проверяем привычки
   if (selectedHabitId.value) {
-    await habitStore.updateHabit(selectedHabitId.value, { notificationTime: time });
-  } else if (todoStore.selectedId) {
-    await todoStore.setReminder(todoStore.selectedId, time);
+    const h = habitStore.habits.find(h => h.id === selectedHabitId.value);
+    return h?.notificationTime || '';
   }
 
-  // Потом закрываем модалку времени
-  isTimePickerOpen.value = false;
-  // И только в самом конце сбрасываем выделение (панель действий)
-  closePanels();
-};
-
-const clearTime = async () => {
-  if (selectedHabitId.value) {
-    await habitStore.updateHabit(selectedHabitId.value, { notificationTime: '' });
-  } else if (todoStore.selectedId) {
-    await todoStore.setReminder(todoStore.selectedId, '');
+  // Проверяем задачи (берем время первой выбранной)
+  if (todoStore.multiSelectedIds.length > 0) {
+    const firstId = todoStore.multiSelectedIds[0];
+    const item = todoStore.mainItems.find(i => i.id === firstId);
+    return item?.reminderTime || '';
   }
 
-  // ОБЯЗАТЕЛЬНО обновляем пропс, чтобы модалка увидела сброс
-  currentTimeForPicker.value = '';
-
-  // УДАЛИ ИЛИ ЗАКОММЕНТИРУЙ ЭТИ СТРОКИ:
-  // isTimePickerOpen.value = false; 
-  // closePanels();
-};
+  return '';
+});
 
 </script>
 

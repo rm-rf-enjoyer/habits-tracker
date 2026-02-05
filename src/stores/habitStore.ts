@@ -38,32 +38,44 @@ export const useHabitStore = defineStore('habitStore', () => {
   };
 
   const toggleHabit = async (id: string, dateStr?: string) => {
-    const habit = habits.value.find(h => h.id === id);
-    if (!habit) return;
+    console.log('Toggle start for:', id); // ЛОГ 1
+    const index = habits.value.findIndex(h => h.id === id);
+    if (index === -1) return;
 
-    // Используем переданную дату или текущую
+    const habit = habits.value[index];
     const targetDate = dateStr || getTodayStr();
-    const index = habit.completedDays.indexOf(targetDate);
 
-    if (index > -1) {
-      // Снимать отметку можно всегда
-      habit.completedDays.splice(index, 1);
+    // Создаем копию объекта для реактивности
+    const updatedHabit = { ...habit };
+    const dateIndex = updatedHabit.completedDays.indexOf(targetDate);
+
+    if (dateIndex > -1) {
+      updatedHabit.completedDays = updatedHabit.completedDays.filter(d => d !== targetDate);
+      console.log('Removing date:', targetDate); // ЛОГ 2
     } else {
-      // Ставить новую — только если не на паузе
-      if (habit.isPaused) return;
-      habit.completedDays.push(targetDate);
-      // b.localeCompare(a) — сортировка от новых к старым (DESC)
-      habit.completedDays.sort((a, b) => b.localeCompare(a));
+      if (updatedHabit.isPaused) {
+        console.log('Habit is paused, skipping');
+        return;
+      }
+      updatedHabit.completedDays = [...updatedHabit.completedDays, targetDate];
+      console.log('Adding date:', targetDate); // ЛОГ 3
     }
 
-    // Обновляем данные стрика
-    const streakData = getStreak(habit);
-    habit.currentStreak = streakData.current;
+    // Сортируем
+    updatedHabit.completedDays.sort((a, b) => b.localeCompare(a));
 
-    if (habit.currentStreak > (habit.bestStreak || 0)) {
-      habit.bestStreak = habit.currentStreak;
+    // СНАЧАЛА обновляем объект в сторе, чтобы UI увидел зачеркивание
+    habits.value[index] = updatedHabit;
+
+    // ТЕПЕРЬ считаем стрик
+    const streakData = getStreak(updatedHabit);
+    habits.value[index].currentStreak = streakData.current;
+
+    if (habits.value[index].currentStreak > (habits.value[index].bestStreak || 0)) {
+      habits.value[index].bestStreak = habits.value[index].currentStreak;
     }
 
+    console.log('New streak:', habits.value[index].currentStreak); // ЛОГ 4
     await saveToStorage();
   };
 
@@ -162,6 +174,18 @@ export const useHabitStore = defineStore('habitStore', () => {
 
   const loadHabits = async () => {
     try {
+      // 1. ПОЛНАЯ ОЧИСТКА ВСЕГО (включая мусор от старых багов)
+      const pending = await LocalNotifications.getPending();
+      if (pending.notifications.length > 0) {
+        await LocalNotifications.cancel(pending);
+      }
+
+      // 2. ДОПОЛНИТЕЛЬНО: Если первый метод не помог, удаляем по ID вручную (диапазон префиксов)
+      // Просто пройдемся циклом по возможным ID, которые мы могли насоздавать
+      // (необязательно, но для надежности можно)
+
+      console.log('СИСТЕМА УВЕДОМЛЕНИЙ ПЕРЕЗАГРУЖЕНА');
+
       const { value } = await Preferences.get({ key: 'habits' });
       if (value) habits.value = JSON.parse(value);
       isInitialized.value = true;
@@ -217,39 +241,85 @@ export const useHabitStore = defineStore('habitStore', () => {
   };
 
   const scheduleNotification = async (habit: Habit) => {
-    const notificationId = parseInt(habit.id.slice(-5));
+    const notificationId = parseInt("1" + habit.id.slice(-7));
+
+    // 1. Отмена старого
+    for (let i = 0; i < 7; i++) {
+      await LocalNotifications.cancel({ notifications: [{ id: parseInt(`${notificationId}${i}`) }] });
+    }
     await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
 
+    // 2. Проверки
     if (!habit.notificationTime || habit.isPaused) return;
 
-    const startDate = new Date(habit.notificationTime);
+    try {
+      const date = new Date(habit.notificationTime);
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
 
-    // Формируем правило повторения
-    let scheduleOptions: any = { at: startDate, allowWhileIdle: true };
+      const notificationsToSchedule = [];
 
-    if (habit.frequency === 'DAILY') {
-      scheduleOptions.repeats = true;
-      scheduleOptions.every = 'day';
-    } else if (habit.frequency === 'WEEKLY') {
-      scheduleOptions.repeats = true;
-      scheduleOptions.every = 'week';
+      if (habit.frequency === 'DAILY') {
+        // Ежедневное уведомление
+        notificationsToSchedule.push({
+          id: notificationId,
+          title: "Пора закрепить привычку!",
+          body: habit.name,
+          schedule: {
+            on: { hour: hours, minute: minutes },
+            repeats: true,
+            allowWhileIdle: true
+          },
+          sound: 'default'
+        });
+      } else if (habit.frequency === 'WEEKLY' && habit.weekDays?.length > 0) {
+        // Уведомления по дням недели
+        // В Capacitor для каждого дня недели создается отдельный триггер в массиве
+        habit.weekDays.forEach((day, index) => {
+          notificationsToSchedule.push({
+            // Создаем уникальный ID для каждого дня (например: 1-ID-0, 1-ID-1...)
+            id: parseInt(`${notificationId}${day}`),
+            title: "День привычки!",
+            body: habit.name,
+            schedule: {
+              on: {
+                weekday: day + 1, // В Capacitor: 1 (Вс) - 7 (Сб)
+                hour: hours,
+                minute: minutes
+              },
+              repeats: true,
+              allowWhileIdle: true
+            },
+            sound: 'default'
+          });
+        });
+      }
+
+      if (notificationsToSchedule.length > 0) {
+        await LocalNotifications.schedule({
+          notifications: notificationsToSchedule
+        });
+        console.log(`[Habit] Запланировано ${notificationsToSchedule.length} уведомлений для ${habit.name}`);
+      }
+    } catch (e) {
+      console.error('Ошибка планирования по дням недели:', e);
     }
-
-    await LocalNotifications.schedule({
-      notifications: [{
-        id: notificationId,
-        title: "Пора закрепить привычку!",
-        body: habit.name,
-        schedule: scheduleOptions,
-        sound: 'default'
-      }]
-    });
   };
 
+  // Возвращаем все методы стора наружу
   return {
-    habits, isInitialized, deletingIds,
-    addHabit, loadHabits, startDelayedRemove,
-    cancelDeletion, saveToStorage,
-    toggleHabit, getStreak, getTodayStr, updateHabit, scheduleNotification
+    habits,
+    isInitialized,
+    deletingIds,
+    addHabit,
+    loadHabits,
+    startDelayedRemove,
+    cancelDeletion,
+    saveToStorage,
+    toggleHabit,
+    getStreak,
+    getTodayStr,
+    updateHabit,
+    scheduleNotification
   };
 });

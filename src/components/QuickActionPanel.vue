@@ -4,6 +4,7 @@
       enter-from-class="-translate-y-full opacity-0" enter-to-class="translate-y-0 opacity-100"
       leave-active-class="transition duration-200 ease-in" leave-from-class="translate-y-0 opacity-100"
       leave-to-class="-translate-y-full opacity-0">
+
       <div v-if="isOpen"
         class="fixed top-0 left-0 right-0 flex justify-center z-[999999] pointer-events-none pt-[calc(env(safe-area-inset-top,20px)+25px)] font-mono">
 
@@ -21,7 +22,7 @@
             :class="isPinned ? 'text-blue-400' : 'text-white'">
             <ion-icon :icon="isPinned ? bookmark : bookmarkOutline" class="text-[18px]"></ion-icon>
             <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">
-              {{ isPinned ? 'Fixed' : 'Pin' }}
+              {{ isPinned ? 'Unpin' : 'Pin' }}
             </span>
           </button>
 
@@ -54,8 +55,8 @@
 <script setup lang="ts">
 import { IonIcon } from '@ionic/vue';
 import {
-  bookmarkOutline, // Контурная закладка (Pin)
-  bookmark,        // Залитая закладка (Pinned)
+  bookmarkOutline,
+  bookmark,
   notificationsOutline,
   trashOutline,
   closeOutline,
@@ -65,8 +66,9 @@ import {
 defineProps<{
   isOpen: boolean;
   isHabit?: boolean;
-  isPinned?: boolean; // Новое свойство для логики подмены
+  isPinned?: boolean; // Состояние первого выбранного элемента
 }>();
+
 
 defineEmits(['action', 'close']);
 </script>

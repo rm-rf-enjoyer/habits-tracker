@@ -16,7 +16,7 @@ export interface TodoItem {
 
 export const useTodoStore = defineStore('todo', () => {
   const mainItems = ref<TodoItem[]>([]);
-  const selectedId = ref<string | null>(null);
+  const multiSelectedIds = ref<string[]>([]);
   const deletingIds = ref<string[]>([]);
   const isLoaded = ref(false);
 
@@ -70,16 +70,40 @@ export const useTodoStore = defineStore('todo', () => {
     findAndToggle(mainItems.value);
   };
 
-  const togglePin = async (id: string) => {
-    const itemIndex = mainItems.value.findIndex(item => item.id === id);
-    if (itemIndex !== -1) {
-      const item = mainItems.value[itemIndex];
-      item.isPinned = !item.isPinned;
-      if (item.isPinned) {
-        const [pinnedItem] = mainItems.value.splice(itemIndex, 1);
-        mainItems.value.unshift(pinnedItem);
+  const togglePin = async (id: string, forceState?: boolean) => {
+    const findAndPin = (list: TodoItem[]): boolean => {
+      const index = list.findIndex(item => item.id === id);
+
+      if (index !== -1) {
+        const item = list[index];
+
+        // Если передали конкретное состояние (forceState), используем его. 
+        // Если нет — просто инвертируем (!item.isPinned)
+        const nextState = forceState !== undefined ? forceState : !item.isPinned;
+
+        if (item.isPinned === nextState) return true; // Уже в нужном состоянии, ничего не делаем
+
+        item.isPinned = nextState;
+
+        if (item.isPinned) {
+          const [pinnedItem] = list.splice(index, 1);
+          list.unshift(pinnedItem);
+        } else {
+          // При откреплении просто оставляем как есть или сдвигаем вниз за пины
+          const [unpinnedItem] = list.splice(index, 1);
+          const lastPinnedIndex = list.findLastIndex(i => i.isPinned);
+          list.splice(lastPinnedIndex + 1, 0, unpinnedItem);
+        }
+        return true;
       }
-    }
+
+      for (const item of list) {
+        if (item.items && findAndPin(item.items)) return true;
+      }
+      return false;
+    };
+
+    findAndPin(mainItems.value);
   };
 
   const toggleListCollapse = (id: string) => {
@@ -92,13 +116,25 @@ export const useTodoStore = defineStore('todo', () => {
   const startDelayedRemove = (id: string) => {
     if (!deletingIds.value.includes(id)) {
       deletingIds.value.push(id);
+
       const timerId = setTimeout(() => {
         if (deletingIds.value.includes(id)) {
-          mainItems.value = mainItems.value.filter(item => item.id !== id);
+          // РЕКУРСИВНОЕ УДАЛЕНИЕ
+          const removeItemRecursive = (list: TodoItem[]): TodoItem[] => {
+            return list
+              .filter(item => item.id !== id) // Удаляем если совпал ID
+              .map(item => ({
+                ...item,
+                items: item.items ? removeItemRecursive(item.items) : item.items // Идем вглубь
+              }));
+          };
+
+          mainItems.value = removeItemRecursive(mainItems.value);
           deletingIds.value = deletingIds.value.filter(di => di !== id);
         }
         timers.delete(id);
       }, 10000);
+
       timers.set(id, timerId);
     }
   };
@@ -118,17 +154,17 @@ export const useTodoStore = defineStore('todo', () => {
     if (!todo) return;
 
     // Генерируем ID уведомления на основе ID задачи
-    const notificationId = parseInt(todoId.replace(/\D/g, '').slice(-5)) || Math.floor(Math.random() * 10000);
+    const rawId = todoId.replace(/\D/g, '').slice(-7);
+    const notificationId = parseInt(`2${rawId}`) || Math.floor(Math.random() * 1000000);
 
-    // В любом случае сначала отменяем старое уведомление
     await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
 
     if (dateTime) {
-      // Если дата передана — планируем новое
       const targetDate = new Date(dateTime);
 
       await LocalNotifications.schedule({
         notifications: [{
+          // Убедись, что здесь именно этот текст
           title: "Напоминание о задаче",
           body: todo.text || todo.title || "Пора сделать дело!",
           id: notificationId,
@@ -139,17 +175,32 @@ export const useTodoStore = defineStore('todo', () => {
 
       todo.reminderTime = dateTime;
     } else {
-      // Если dateTime пустой — просто стираем время из задачи
-      todo.reminderTime = undefined; // или ''
+      todo.reminderTime = undefined;
     }
 
-    // Сохраняем обновленное состояние (с датой или без)
     await saveToStorage();
+  };
+
+  const clearSelection = () => {
+    multiSelectedIds.value = [];
+  };
+
+  const updateSubItems = (parentId: string, newItems: TodoItem[]) => {
+    const findAndUpdate = (list: TodoItem[]) => {
+      for (const item of list) {
+        if (item.id === parentId) {
+          item.items = [...newItems]; // Обновляем массив
+          return true;
+        }
+        if (item.items && findAndUpdate(item.items)) return true;
+      }
+      return false;
+    };
+    findAndUpdate(mainItems.value);
   };
 
   return {
     mainItems,
-    selectedId,
     deletingIds,
     isLoaded,
     loadData,
@@ -159,6 +210,9 @@ export const useTodoStore = defineStore('todo', () => {
     startDelayedRemove,
     cancelDeletion,
     togglePin,
-    setReminder // ИСПРАВЛЕНО: Добавили в экспорт
+    multiSelectedIds,
+    clearSelection,
+    setReminder,
+    updateSubItems
   };
 });

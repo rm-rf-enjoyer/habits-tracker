@@ -12,43 +12,39 @@
           <div class="flex flex-col items-center justify-center mb-3 text-center">
             <ion-icon :icon="notificationsOutline" class="text-blue-500 text-lg mb-1"></ion-icon>
             <h3 class="text-[9px] font-black tracking-[0.2em] uppercase opacity-60">
-              Напоминание
+              Время уведомления
             </h3>
           </div>
 
           <div class="space-y-2 mb-4">
-            <div class="relative border transition-all duration-200 px-3 py-1.5
+            <div class="relative border transition-all duration-200 px-3 py-2
                         bg-zinc-100 border-zinc-200 focus-within:border-blue-500
                         dark:bg-zinc-800 dark:border-zinc-700 dark:focus-within:border-blue-600"
-              style="border-radius: 6px !important;" :class="{ 'border-red-500/50': isPast }">
+              style="border-radius: 6px !important;">
 
-              <input :key="isOpen ? 'open' : 'closed'" type="datetime-local" v-model="selectedTime" :min="minDateTime"
-                class="w-full bg-transparent border-none font-mono text-sm outline-none appearance-none
-                       text-zinc-900 dark:text-white" :class="{ 'text-red-500 dark:text-red-400': isPast }" />
+              <input type="time" v-model="selectedTime" class="w-full bg-transparent border-none font-mono text-2xl text-center outline-none appearance-none
+                       text-zinc-900 dark:text-white" />
             </div>
-            <p v-if="isPast" class="text-[9px] text-red-500 font-bold text-center leading-none italic">
-              ⚠️ Время уже прошло
-            </p>
           </div>
 
           <div class="flex flex-col gap-1.5">
             <div class="flex gap-1.5">
               <button class="flex-1 h-10 flex items-center justify-center text-[10px] font-bold uppercase transition-all
-                       bg-zinc-200 text-zinc-700 active:bg-zinc-300
-                       dark:bg-zinc-800 dark:text-zinc-300 dark:active:bg-zinc-700"
+                               bg-zinc-200 text-zinc-700 active:bg-zinc-300
+                               dark:bg-zinc-800 dark:text-zinc-300 dark:active:bg-zinc-700"
                 style="border-radius: 6px !important;" @click="handleCancel">
                 Отмена
               </button>
               <button class="flex-1 h-10 flex items-center justify-center text-[10px] font-bold text-white uppercase transition-all
-                       bg-blue-600 active:bg-blue-700 disabled:opacity-30" style="border-radius: 6px !important;"
-                :disabled="isPast || !selectedTime" @click="handleConfirm">
+                               bg-blue-600 active:bg-blue-700 disabled:opacity-30"
+                style="border-radius: 6px !important;" :disabled="!selectedTime" @click="handleConfirm">
                 ОК
               </button>
             </div>
 
             <button class="w-full h-10 flex items-center justify-center text-[10px] font-bold uppercase transition-all
-                     bg-red-50 text-red-600 border border-red-100 active:bg-red-100
-                     dark:bg-zinc-800/40 dark:text-red-500/70 dark:border-red-500/10 dark:active:bg-red-500/10"
+                         bg-red-50 text-red-600 border border-red-100 active:bg-red-100
+                         dark:bg-zinc-800/40 dark:text-red-500/70 dark:border-red-500/10 dark:active:bg-red-500/10"
               style="border-radius: 6px !important;" @click="handleClear">
               Сбросить
             </button>
@@ -60,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { notificationsOutline } from 'ionicons/icons';
 import { IonIcon } from '@ionic/vue';
 
@@ -69,34 +65,31 @@ const emit = defineEmits(['close', 'confirm', 'clear']);
 
 const selectedTime = ref('');
 
-const toLocalISO = (dateStr: any) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '';
-  const offset = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+// Превращает ISO дату или пустую строку в формат "HH:mm"
+const formatToTime = (dateStr: string) => {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 };
-
-const minDateTime = ref(toLocalISO(null));
 
 watch(() => props.isOpen, async (val) => {
   if (val) {
-    minDateTime.value = toLocalISO(null);
     await nextTick();
-    // Если в currentTime пусто, ставим текущее время
-    selectedTime.value = props.currentTime ? toLocalISO(props.currentTime) : minDateTime.value;
+    // Инициализируем временем из пропсов или текущим системным
+    selectedTime.value = formatToTime(props.currentTime);
   }
 }, { immediate: true });
 
-const isPast = computed(() => {
-  if (!selectedTime.value) return false;
-  if (props.currentTime && selectedTime.value === toLocalISO(props.currentTime)) return false;
-  return selectedTime.value < minDateTime.value;
-});
-
 const handleConfirm = () => {
-  if (!isPast.value && selectedTime.value) {
-    emit('confirm', selectedTime.value);
+  if (selectedTime.value) {
+    // Создаем объект даты на сегодня и подставляем выбранное время
+    const [hours, minutes] = selectedTime.value.split(':');
+    const d = new Date();
+    d.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+    // Эмитим ISO строку, чтобы стор мог создать из нее объект Date
+    emit('confirm', d.toISOString());
   }
 };
 
@@ -104,19 +97,19 @@ const handleCancel = () => {
   emit('close');
 };
 
-// ЭТА ФУНКЦИЯ ИСПРАВЛЯЕТ ПРОБЛЕМУ
 const handleClear = () => {
-  // Сбрасываем визуально инпут в текущее время (минимальное)
-  selectedTime.value = toLocalISO(null);
-
-  // Шлем событие родителю, чтобы он почистил Store
   emit('clear');
-
-  // ТУТ НЕ ДОЛЖНО БЫТЬ emit('close')
 };
+
 </script>
 
 <style scoped>
+/* Убираем лишние стили инпута, оставляем только нужные */
+input[type="time"]::-webkit-calendar-picker-indicator {
+  display: none;
+  /* Скрываем стандартную иконку часов, если мешает */
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.1s ease, transform 0.1s ease;
@@ -126,26 +119,5 @@ const handleClear = () => {
 .fade-leave-to {
   opacity: 0;
   transform: scale(0.98);
-}
-
-input[type="datetime-local"] {
-  color-scheme: dark;
-  min-height: 1.5rem;
-}
-
-::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
-  cursor: pointer;
-}
-
-input[type="datetime-local"] {
-  color-scheme: light dark;
-}
-
-/* Фикс инверсии иконки для темной темы */
-@media (prefers-color-scheme: dark) {
-  ::-webkit-calendar-picker-indicator {
-    filter: invert(0.7);
-  }
 }
 </style>

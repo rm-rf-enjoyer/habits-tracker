@@ -21,6 +21,7 @@
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
 import type { Habit } from '../stores/habitStore';
+import { useHabitStore } from '../stores/habitStore'; // Импорт стора привычек
 
 const props = defineProps<{
   habit: Habit;
@@ -28,26 +29,36 @@ const props = defineProps<{
   isDeleting: boolean;
 }>();
 
+const habitStore = useHabitStore(); // Инициализируем
 defineEmits(['touchstart', 'touchend', 'touchmove', 'click', 'cancel-delete']);
 
 const itemStyle = computed((): CSSProperties => ({
+  // Используем пропс isSelected, который передает родитель
   border: '1px solid ' + (props.isSelected ? '#3880ff' : 'var(--border-color)'),
-  borderRadius: '4px',
-  padding: '6px 12px',
-  backgroundColor: props.isSelected ? 'var(--selected-bg)' : 'var(--card-bg)',
+  borderRadius: '8px',
+  padding: '8px 12px',
+  backgroundColor: props.isSelected ? 'rgba(56, 128, 255, 0.12)' : 'var(--card-bg)',
   display: 'block',
-  position: 'relative'
+  position: 'relative',
+  transition: 'all 0.2s ease'
 }));
 
 const taskTextStyle = computed((): CSSProperties => {
-  const isCompletedToday = props.habit.completedDays.includes(new Date().toISOString().split('T')[0]);
+  const todayStr = habitStore.getTodayStr();
+
+  // ВАЖНО: Обращаемся к массиву через props.habit.completedDays
+  // Vue отследит изменение внутри этого массива
+  const isCompletedToday = props.habit.completedDays.includes(todayStr);
+
   return {
     textDecoration: isCompletedToday ? 'line-through' : 'none',
-    color: isCompletedToday ? 'var(--text-muted)' : 'var(--text-color)',
+    color: isCompletedToday ? 'var(--ion-color-step-400, #8a8a8e)' : 'var(--ion-text-color)',
+    opacity: isCompletedToday ? 0.6 : 1,
     fontSize: '0.85rem',
-    lineHeight: '1.2'
+    transition: 'all 0.2s ease'
   };
 });
+
 </script>
 
 <style scoped>
