@@ -1,7 +1,8 @@
 <template>
   <ion-page>
-    <QuickActionPanel :is-open="todoStore.multiSelectedIds.length > 0" :is-pinned="isFirstSelectedPinned"
-      @action="handleBulkAction" @close="todoStore.clearSelection()" />
+    <QuickActionPanel :is-open="todoStore.multiSelectedIds.length > 0 || !!selectedHabitId"
+      :is-pinned="isFirstSelectedPinned" :is-habit="activeTab === 'habits'" @action="handleBulkAction"
+      @close="closePanels" />
 
     <EditHabitModal v-if="isEditModalOpen" :is-open="isEditModalOpen" :habit-id="selectedHabitId"
       @close="isEditModalOpen = false; closePanels();" />
@@ -77,8 +78,13 @@ const isTimePickerOpen = ref(false);
 
 // 1. Сброс всех выделений
 const closePanels = () => {
+  // Сбрасываем выделение задач в сторе
   todoStore.clearSelection();
+
+  // Сбрасываем ID выбранной привычки
   selectedHabitId.value = null;
+
+  console.log('Панель закрыта, ID привычки сброшен');
 };
 
 onMounted(async () => {

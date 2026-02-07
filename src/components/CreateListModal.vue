@@ -25,6 +25,24 @@
           </textarea>
         </div>
 
+        <div class="mb-4">
+          <button @click="isShared = !isShared"
+            class="w-full h-9 flex items-center justify-between px-3 transition-all border group" :class="isShared
+              ? 'border-blue-500 bg-blue-500/5 text-blue-600'
+              : 'border-zinc-200 dark:border-zinc-700 text-zinc-400'" style="border-radius: 6px !important;">
+            <span class="text-[9px] font-black tracking-widest uppercase">Групповой доступ</span>
+            <div class="w-8 h-4 relative flex items-center">
+              <div class="absolute inset-0 rounded-full transition-colors"
+                :class="isShared ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-600'"></div>
+              <div class="absolute w-3 h-3 bg-white rounded-full transition-transform shadow-sm"
+                :style="{ transform: isShared ? 'translateX(18px)' : 'translateX(2px)' }"></div>
+            </div>
+          </button>
+          <p v-if="isShared" class="text-[8px] mt-1.5 text-blue-500 opacity-70 uppercase tracking-tighter">
+            * Список будет синхронизирован с сервером
+          </p>
+        </div>
+
         <div class="grid grid-cols-2 gap-3">
           <button type="button" class="h-11 text-[11px] font-bold tracking-wider uppercase transition-all
                    bg-zinc-100 dark:bg-zinc-800 
@@ -34,12 +52,13 @@
             ОТМЕНА
           </button>
 
-          <button type="button" class="h-11 text-[11px] font-bold tracking-wider uppercase transition-all
+          <button type="button" :disabled="isLoading" class="h-11 text-[11px] font-bold tracking-wider uppercase transition-all
                    bg-blue-600 dark:bg-blue-600 
                    text-white 
-                   active:bg-blue-700 dark:active:bg-blue-700 shadow-md shadow-blue-500/20"
-            style="border-radius: 6px !important;" @click="handleCreate">
-            СОЗДАТЬ
+                   active:bg-blue-700 dark:active:bg-blue-700 shadow-md shadow-blue-500/20
+                   disabled:opacity-50 disabled:grayscale" style="border-radius: 6px !important;"
+            @click="handleCreate">
+            {{ isLoading ? 'СОЗДАНИЕ...' : 'СОЗДАТЬ' }}
           </button>
         </div>
       </div>
@@ -53,25 +72,57 @@ import { useTodoStore, type TodoItem } from '../stores/todoStore';
 
 const emit = defineEmits(['close']);
 const todoStore = useTodoStore();
+
 const listTitle = ref('');
+const isShared = ref(false); // Состояние группового списка
+const isLoading = ref(false); // Лоадер для запроса
 const inputRef = ref<HTMLTextAreaElement | null>(null);
+
+interface CloudListResponse {
+  id: string;
+  inviteKey: string;
+  title: string;
+  ownerId: string;
+}
 
 onMounted(() => setTimeout(() => inputRef.value?.focus(), 150));
 
-const handleCreate = () => {
+const handleCreate = async () => {
   const titleValue = listTitle.value.trim();
   if (!titleValue) { emit('close'); return; }
 
-  const newList: TodoItem = {
-    id: Date.now().toString(),
-    title: titleValue,
-    completed: false,
-    items: [],
-    isCollapsed: false
-  };
+  isLoading.value = true;
 
-  todoStore.mainItems.push(newList);
-  emit('close');
+  try {
+    // Указываем тип явно
+    let remoteData: CloudListResponse | null = null;
+
+    if (isShared.value) {
+      // IDE теперь поймет, что придет внутри remoteData
+      remoteData = await todoStore.createCloudList(titleValue);
+    }
+
+    const newList: TodoItem = {
+      // Используем опциональную цепочку ?.
+      id: remoteData?.id || Date.now().toString(),
+      title: titleValue,
+      completed: false,
+      items: [],
+      isCollapsed: false,
+      remoteId: remoteData?.id || null,
+      inviteKey: remoteData?.inviteKey || null,
+      isCloud: !!isShared.value // Приводим к boolean
+    };
+
+    todoStore.mainItems.push(newList);
+    emit('close');
+  } catch (error: any) {
+    // Для отладки Network Error на мобилке
+    alert(`Ошибка: ${error.message}`);
+    console.error(error);
+  } finally {
+    isLoading.value = false;
+  }
 };
 </script>
 

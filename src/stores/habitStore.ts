@@ -241,56 +241,54 @@ export const useHabitStore = defineStore('habitStore', () => {
   };
 
   const scheduleNotification = async (habit: Habit) => {
-    const notificationId = parseInt("1" + habit.id.slice(-7));
+    // 1. Генерируем базовый безопасный ID (не более 6-7 знаков)
+    const baseId = parseInt(habit.id.slice(-6));
 
-    // 1. Отмена старого
-    for (let i = 0; i < 7; i++) {
-      await LocalNotifications.cancel({ notifications: [{ id: parseInt(`${notificationId}${i}`) }] });
+    // 2. Очищаем все возможные старые уведомления для этой привычки (0-7 дни)
+    const notificationsToCancel = [];
+    for (let i = 0; i <= 7; i++) {
+      notificationsToCancel.push({ id: baseId + i });
     }
-    await LocalNotifications.cancel({ notifications: [{ id: notificationId }] });
+    await LocalNotifications.cancel({ notifications: notificationsToCancel });
 
-    // 2. Проверки
+    // 3. Проверки
     if (!habit.notificationTime || habit.isPaused) return;
 
     try {
       const date = new Date(habit.notificationTime);
       const hours = date.getHours();
       const minutes = date.getMinutes();
-
       const notificationsToSchedule = [];
 
       if (habit.frequency === 'DAILY') {
-        // Ежедневное уведомление
         notificationsToSchedule.push({
-          id: notificationId,
+          id: baseId,
           title: "Пора закрепить привычку!",
           body: habit.name,
           schedule: {
             on: { hour: hours, minute: minutes },
             repeats: true,
             allowWhileIdle: true
-          },
-          sound: 'default'
+          }
         });
       } else if (habit.frequency === 'WEEKLY' && habit.weekDays?.length > 0) {
-        // Уведомления по дням недели
-        // В Capacitor для каждого дня недели создается отдельный триггер в массиве
-        habit.weekDays.forEach((day, index) => {
+        habit.weekDays.forEach((day) => {
+          // day должен быть 1 (Вс) - 7 (Сб). 
+          // Если у вас 0 (Пн) - 6 (Вс), используйте: ((day + 1) % 7) + 1
+
           notificationsToSchedule.push({
-            // Создаем уникальный ID для каждого дня (например: 1-ID-0, 1-ID-1...)
-            id: parseInt(`${notificationId}${day}`),
+            id: baseId + day + 1, // Уникальный ID для каждого дня
             title: "День привычки!",
             body: habit.name,
             schedule: {
               on: {
-                weekday: day + 1, // В Capacitor: 1 (Вс) - 7 (Сб)
+                weekday: day + 1, // ВАЖНО: Убедитесь, что здесь 1 (Вс) - 7 (Сб)
                 hour: hours,
                 minute: minutes
               },
               repeats: true,
               allowWhileIdle: true
-            },
-            sound: 'default'
+            }
           });
         });
       }
@@ -299,13 +297,12 @@ export const useHabitStore = defineStore('habitStore', () => {
         await LocalNotifications.schedule({
           notifications: notificationsToSchedule
         });
-        console.log(`[Habit] Запланировано ${notificationsToSchedule.length} уведомлений для ${habit.name}`);
+        console.log(`[Habit] Запланировано:`, notificationsToSchedule);
       }
     } catch (e) {
-      console.error('Ошибка планирования по дням недели:', e);
+      console.error('Ошибка планирования:', e);
     }
   };
-
   // Возвращаем все методы стора наружу
   return {
     habits,

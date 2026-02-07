@@ -25,6 +25,7 @@
     "@ionic/vue": "^8.0.0",
     "@ionic/vue-router": "^8.0.0",
     "@tailwindcss/vite": "^4.1.18",
+    "axios": "^1.13.4",
     "ionicons": "^7.0.0",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
