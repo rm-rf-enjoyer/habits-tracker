@@ -3,7 +3,11 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'io.ionic.starter',
   appName: 'HabitsTracker',
-  webDir: 'dist'
+  webDir: 'dist',
+  server: {
+    androidScheme: 'http',
+    allowNavigation: ['194.87.208.246'] // Разрешаем доступ к этому IP
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 3000, // Отображать 3 секунды

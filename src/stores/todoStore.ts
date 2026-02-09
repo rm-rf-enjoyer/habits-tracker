@@ -5,7 +5,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import axios from 'axios'; // Не забудь установить: npm install axios
 
 // Базовый URL твоего бэкенда
-const API_URL = 'http://192.168.0.240:3000';
+const API_URL = 'http://194.87.208.246';
 
 export interface TodoItem {
   id: string;
@@ -44,35 +44,46 @@ export const useTodoStore = defineStore('todo', () => {
   };
 
   const registerDeviceIfNeeded = async () => {
-    // Если ID еще нет — генерируем новый
-    if (!deviceId.value) {
-      const newId = crypto.randomUUID();
-      try {
-        await axios.post(`${API_URL}/register-device`, { deviceId: newId });
-        deviceId.value = newId;
-        await Preferences.set({ key: DEVICE_KEY, value: newId });
-      } catch (e) {
-        console.error("Ошибка регистрации устройства", e);
-        throw e;
-      }
-    }
-    return deviceId.value;
-  };
+    if (deviceId.value) return deviceId.value;
 
-  // --- ЛОГИКА ОБЛАЧНЫХ СПИСКОВ ---
+    const { value } = await Preferences.get({ key: DEVICE_KEY });
+    if (value) {
+      deviceId.value = value;
+      // Даже если ID есть локально, стоит убедиться, что сервер о нем знает
+      // но для скорости просто возвращаем
+      return value;
+    }
+
+    const newId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+    try {
+      // ЖДЕМ завершения регистрации на сервере
+      await axios.post(`${API_URL}/register-device`, { deviceId: newId });
+
+      // Только после успешного ответа сервера сохраняем локально
+      deviceId.value = newId;
+      await Preferences.set({ key: DEVICE_KEY, value: newId });
+      return newId;
+    } catch (e) {
+      console.error("Критическая ошибка: не удалось зарегистрировать устройство", e);
+      throw e; // Пробрасываем ошибку, чтобы /lists не вызвался
+    }
+  };
 
   const createCloudList = async (title: string) => {
     try {
-      // 1. Убеждаемся, что устройство зарегистрировано
       const id = await registerDeviceIfNeeded();
+      if (!id) throw new Error("Device ID not found");
 
-      // 2. Делаем запрос на создание списка
       const response = await axios.post(`${API_URL}/lists`,
-        { title },
-        { headers: { 'x-device-id': id } }
+        { title: title },
+        {
+          headers: {
+            'x-device-id': String(id),
+            'Content-Type': 'application/json'
+          }
+        }
       );
-
-      // Возвращаем данные (там будет id и inviteKey)
       return response.data;
     } catch (e) {
       console.error("Ошибка создания облачного списка", e);
