@@ -49,7 +49,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useTodoStore, type TodoItem } from '../stores/todoStore';
+import { useTodoStore } from '../stores/todoStore';
 import { useRoute } from 'vue-router';
 
 const props = defineProps<{ listId: string | null }>();
@@ -62,32 +62,31 @@ const inputRef = ref<HTMLTextAreaElement | null>(null);
 
 onMounted(() => setTimeout(() => inputRef.value?.focus(), 150));
 
-const handleCreate = () => {
+const handleCreate = async () => {
   const textValue = taskText.value.trim();
-  if (!textValue) { emit('close'); return; }
 
-  const currentListId = props.listId || (route.params.id as string);
-
-  const newTask: TodoItem = {
-    id: Date.now().toString(),
-    text: textValue,
-    completed: false,
-    isPinned: false
-  };
-
-  if (currentListId) {
-    const parent = todoStore.mainItems.find(i => i.id === currentListId);
-    if (parent) {
-      if (!parent.items) parent.items = [];
-      parent.items.push(newTask);
-    }
-  } else {
-    todoStore.mainItems.push(newTask);
+  // Если текста нет — просто закрываем
+  if (!textValue) {
+    emit('close');
+    return;
   }
 
+  // Определяем ID родительского списка (из пропсов или из URL)
+  const currentListId = props.listId || (route.params.id as string) || null;
+
+  try {
+    // ВАЖНО: Вызываем метод из стора, который умеет работать с API
+    // Мы передаем ID списка и текст. Стор сам решит, слать это в облако или нет.
+    await todoStore.addTask(currentListId, textValue);
+
+    console.log("✅ Задача обработана стором");
+  } catch (e) {
+    console.error("❌ Ошибка при создании задачи:", e);
+  }
+
+  // Очищаем и закрываем
   taskText.value = '';
   emit('close');
 };
 </script>
-
 <style scoped></style>

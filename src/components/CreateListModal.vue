@@ -69,61 +69,53 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useTodoStore, type TodoItem } from '../stores/todoStore';
+import { generateSafeId } from '../utils/uuid'; // Добавь импорт, если он нужен для локальных списков
 
 const emit = defineEmits(['close']);
 const todoStore = useTodoStore();
 
 const listTitle = ref('');
-const isShared = ref(false); // Состояние группового списка
-const isLoading = ref(false); // Лоадер для запроса
+const isShared = ref(false);
+const isLoading = ref(false);
 const inputRef = ref<HTMLTextAreaElement | null>(null);
-
-interface CloudListResponse {
-  id: string;
-  inviteKey: string;
-  title: string;
-  ownerId: string;
-}
 
 onMounted(() => setTimeout(() => inputRef.value?.focus(), 150));
 
 const handleCreate = async () => {
   const titleValue = listTitle.value.trim();
-  if (!titleValue) { emit('close'); return; }
+  if (!titleValue || isLoading.value) { // Защита от повторного нажатия
+    if (!titleValue) emit('close');
+    return;
+  }
 
   isLoading.value = true;
 
   try {
-    // Указываем тип явно
-    let remoteData: CloudListResponse | null = null;
-
     if (isShared.value) {
-      // IDE теперь поймет, что придет внутри remoteData
-      remoteData = await todoStore.createCloudList(titleValue);
+      // ГРУППОВОЙ СПИСОК:
+      // Просто вызываем метод стора. Стор САМ создаст объект и запушит его в массив.
+      await todoStore.createCloudList(titleValue);
+    } else {
+      // ЛОКАЛЬНЫЙ СПИСОК:
+      // Создаем вручную и пушим, так как в сторе нет метода для простых списков
+      const newList: TodoItem = {
+        id: generateSafeId(),
+        title: titleValue,
+        completed: false,
+        items: [],
+        isCollapsed: false,
+        isCloud: false
+      };
+      todoStore.mainItems.push(newList);
     }
 
-    const newList: TodoItem = {
-      // Используем опциональную цепочку ?.
-      id: remoteData?.id || Date.now().toString(),
-      title: titleValue,
-      completed: false,
-      items: [],
-      isCollapsed: false,
-      remoteId: remoteData?.id || null,
-      inviteKey: remoteData?.inviteKey || null,
-      isCloud: !!isShared.value // Приводим к boolean
-    };
-
-    todoStore.mainItems.push(newList);
     emit('close');
   } catch (error: any) {
-    // Для отладки Network Error на мобилке
-    alert(`Ошибка: ${error.message}`);
+    alert(`Ошибка сервера: ${error.message}`);
     console.error(error);
   } finally {
     isLoading.value = false;
   }
 };
 </script>
-
 <style scoped></style>

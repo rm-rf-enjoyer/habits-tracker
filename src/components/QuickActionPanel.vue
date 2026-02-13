@@ -26,7 +26,13 @@
             </span>
           </button>
 
-          <button @click.stop="$emit('action', 'remind')"
+          <button v-if="inviteKey" @click.stop="$emit('action', 'share')"
+            class="flex flex-col items-center justify-center flex-1 text-emerald-400 active:scale-90 transition-transform">
+            <ion-icon :icon="shareSocialOutline" class="text-[18px]"></ion-icon>
+            <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">Share</span>
+          </button>
+
+          <button v-else @click.stop="$emit('action', 'remind')"
             class="flex flex-col items-center justify-center flex-1 text-white active:scale-90 transition-transform">
             <ion-icon :icon="notificationsOutline" class="text-[18px]"></ion-icon>
             <span class="text-[9px] font-black mt-0.5 tracking-tighter uppercase">Notif</span>
@@ -60,13 +66,15 @@ import {
   notificationsOutline,
   trashOutline,
   closeOutline,
-  pencilOutline
+  pencilOutline,
+  shareSocialOutline
 } from 'ionicons/icons';
 
 defineProps<{
   isOpen: boolean;
   isHabit?: boolean;
-  isPinned?: boolean; // Состояние первого выбранного элемента
+  isPinned?: boolean;
+  inviteKey?: string | null;
 }>();
 
 

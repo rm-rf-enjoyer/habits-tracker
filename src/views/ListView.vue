@@ -21,6 +21,9 @@
     </header>
 
     <ion-content>
+      <ion-refresher slot="fixed" @ionRefresh="handleRefresh($event)">
+        <ion-refresher-content></ion-refresher-content>
+      </ion-refresher>
       <div class="p-2 min-h-full bg-white dark:bg-zinc-950 transition-colors duration-300">
         <TaskSubList v-if="currentList" :tasks="currentList.items || []" :deleting-ids="todoStore.deletingIds"
           @update:tasks="(newList) => {
@@ -39,7 +42,7 @@
 
 <script setup lang="ts">
 // Скрипт оставляем без изменений, он правильный
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useTodoStore, type TodoItem } from '../stores/todoStore';
 import { IonPage, IonContent, IonButtons, IonBackButton } from '@ionic/vue';
@@ -109,6 +112,25 @@ const onDateSelected = async (e: Event) => {
 
   target.value = '';
   todoStore.clearSelection();
+};
+
+onMounted(async () => {
+  // Если зашли в список, который помечен как облачный и имеет remoteId
+  if (currentList.value?.isCloud && currentList.value.remoteId) {
+    try {
+      await todoStore.fetchRemoteList(currentList.value.remoteId);
+      console.log("✅ Список синхронизирован с облаком");
+    } catch (e) {
+      console.error("❌ Не удалось обновить список:", e);
+    }
+  }
+});
+
+const handleRefresh = async (event: any) => {
+  if (currentList.value?.isCloud && currentList.value.remoteId) {
+    await todoStore.fetchRemoteList(currentList.value.remoteId);
+  }
+  event.target.complete(); // Останавливает анимацию крутилки
 };
 </script>
 
